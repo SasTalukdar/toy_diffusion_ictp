@@ -3,9 +3,35 @@ import scipy as sp
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
+from scipy.linalg import solve_banded
 import random as ran
+import time
 #import pandas as pd
 
+nday=25
+subopt=1
+Ldomain=1000.e3
+dt=3600. # inseconds
+dx=1000.
+Lrun=50*nday*86400
+nx=int(Ldomain/dx)  # number of points
+
+# diffusion coefficient m*m/s
+ustar=1.0
+Lconv=10.e3 # convection scale in m
+diffK=0.4*Lconv*ustar # diffusion coefficient m^2/s
+
+# target R from moistening, 3kg/m$^{-2}$ of IWP on 60 kgm2 tcwv:
+crh_detrain=1.05 # check out column ice ratio in detrainment to set this...
+
+noiselist=[0.0,0.1,0.5]
+# this DT/timescale of subsidence drying...
+
+dt_tau_sub=dt/(20.*86400.) #
+# this is dt/tau of convective moistening
+dt_tau_cnv=dt/(60.) # days
+crh_init=0.8
+    
 
 def fig_trimmings(n):
     # add lables
@@ -33,11 +59,14 @@ def subsidence(crh,opt=1):
     function for subsidence
     """
     if opt==0:
+        # subsidence function of humidity to mimic
+        # reduction in cooling for very dry columns
         timescale=12.+10*abs(crh-0.6)
     if opt==1:
-        timescale=120.
-        if crh>1.0:
-            timescale=2
+        # constant except for saturated columns (why?)
+        timescale=subsidence_tau
+        #if crh>1.0:
+        #    timescale=2
     return timescale
 
 
@@ -46,34 +75,14 @@ def diffusion(T,opt,nrun,subopt=1,noiser=0.0,perc_conv=0.8,Ldomain=2000.,nbar=1.
     Simplest expression of the computational algorithm
     for the Backward Euler method, using explicit Python loops
     and a dense matrix format for the coefficient matrix.
-    """
-
-    nx=499  # number of points
-    
-    # diffusion coefficient m*m/s
-    # so set K=L*L/S where S is the root of the shear
-    # treating deformation radiys as a giant eddy...
-    # L=domain length - 10**6
-    # treat S**2=du/dz**2 : u=10 m/s z=10**4
-    # thus K=10^6 10^6 10^4 / 10
-    ustar=1.0
-    diffK=0.1*Ldomain*ustar # diffusion coefficient m^2/s
-
-    # target R
-    crh_det=1.5
+    """    
     
     # set up grid
-    x = np.linspace(0, Ldomain, nx+1)   # mesh points in space
-    dx = x[1] - x[0]
-    dt = 3600
+    x = np.linspace(0, Ldomain, nx)   # mesh points in space
 
-    # linestyles
+   # linestyles
     lslist=['solid','dashed','dotted','dashdot']
     collist=['b','y','r','c','g']
-    
-    # this DT/timescale of subsidence drying...
-    #subtau=dt/(10.*86400.) # days
-    subfac=dt/86400.
     
     #--- end of setup
     
@@ -81,12 +90,12 @@ def diffusion(T,opt,nrun,subopt=1,noiser=0.0,perc_conv=0.8,Ldomain=2000.,nbar=1.
     
     Nt = int(round(T/float(dt)))
     t = np.linspace(0, T, Nt+1)   # mesh points in time
-    crh_0 = np.zeros(nx+1)
-    crh_1 = np.zeros(nx+1)
+    crh_0 = np.zeros(nx)
+    crh_1 = np.zeros(nx)
 
     #diagnostic stuff
     nstore=min(360,Nt)
-    crh_store = np.zeros((nstore,nx+1))
+    crh_store = np.zeros((nstore,nx))
     conv_store = np.zeros((nstore))
 
     bins=np.linspace(0,1,21)
@@ -98,64 +107,66 @@ def diffusion(T,opt,nrun,subopt=1,noiser=0.0,perc_conv=0.8,Ldomain=2000.,nbar=1.
     ncbins=len(cbins)-1
 
     # Data structures for the linear system
-    A = np.zeros((nx+1, nx+1))
-    b = np.zeros(nx+1)
+    A=np.zeros((nx, nx))
+    D=np.zeros((nx, nx))
+    b=np.zeros(nx)
     
-    # Set initial condition u(x,0) = I(x)
-    for i in range(0, nx+1):
-        if i<(nx+2)/2:
-            crh_0[i]=(2.*i)/(nx+1)
-        else:
-            crh_0[i]=2.0-(i*2./(nx+1))
-
-    # neighboring points
-    ipos= [ i+1 if i<nx else 0 for i in range(0,nx+1) ]
-    ineg= [ i-1 if i>0 else nx for i in range(0,nx+1) ]
-
+    # Set initial condition, constant plus white noise
+    crh_0=np.random.normal(loc=crh_init,scale=0.01,size=nx)
+    
+    # 
+    # integration loop
     #
     for istep in range(0, Nt):
         #print ("step",istep,crh_0.mean())
         
         # define A, implicit
         # with cyclic boundaries
-        for i in range(0, nx+1):
-            A[i,ineg[i]] = -F
-            A[i,ipos[i]] = -F
-            subloss=subfac/subsidence(crh_0[i],subopt)
-            A[i,i] = 1 + 2*F + subloss
+        #for i in range(0, nx):
+        #    A[i,ineg[i]] = -F
+        #    A[i,ipos[i]] = -F
+        #    subloss=subfac/subsidence(crh_0[i],subopt)
+        #A[i,i] = 1 + 2*F + dt_tau_sub 
+
+        A=np.zeros((nx,nx))
+        np.fill_diagonal(A,1.0+2.*F+dt_tau_sub)
+        np.fill_diagonal(D,-F)
+        A+=np.roll(D,1,axis=0)+np.roll(D,-1,axis=0)
 
         # stochastic term goes in here:
+
         noisedev=noiser*crh_0.std()
-        noise=0.0 if noiser<=0.0 else np.random.normal(0.0,noisedev,(nx+1))
+        noise=0.0 if noiser<=0.0 else np.random.normal(0.0,noisedev,(nx))
         
         # sorted array of water vapor 
-        srt=sorted(range(len(crh_0)),key=(crh_0+noise).__getitem__)
         
         # conv location options
         if opt==1:
             # added in noise
-            index=(crh_0+noise).argmax()
+            index=(crh_0).argmax()
         if opt==2:
-            index=(nx+1)*ran.random()
+            index=np.random.randint(nx)
+            #print ("idx ",index)
         if opt==3:
             # this selects the perc_conv percentile:
-            index=srt[int(perc_conv*(nx+1))]
+            srt=sorted(range(len(crh_0)),key=(crh_0+noise).__getitem__)
+            index=srt[int(perc_conv*(nx))]
 
         # record convection as a function of TCWV
         conv_store=np.roll(conv_store,1)
         conv_store[0]=crh_0[index]
-        
-        # now do RHS
-        b=crh_0
 
-        # convection source term - set RHS to 1 and remove implicit terms
-        A[index,:]=0.0
-        A[index,index]=1.0
-        b[index]=crh_det # answer required at max
-                        
-        # Compute b and solve linear system
-        crh_1[:] = np.linalg.solve(A, b)
+        # RHS
+        b=crh_0
+               
+        # convection source term 
+        A[index,index]+=dt_tau_cnv # 
+        b[index]+=dt_tau_cnv*crh_detrain
         
+        # Compute b and solve linear system - this is slow...
+        crh_1=np.linalg.solve(A,b)
+
+        print("check after solver at index ",index,crh_1[index])
         # Update crh_0 before next step
         crh_0, crh_1 = crh_1, crh_0
 
@@ -207,15 +218,11 @@ def diffusion(T,opt,nrun,subopt=1,noiser=0.0,perc_conv=0.8,Ldomain=2000.,nbar=1.
 #-----------------------------------------------------------------------
 if __name__ == '__main__':
 
-    # set up figure
 
-    nday=50
-    subopt=1
-    Ldomain=2000*1000.
-    Lrun=3600*24*nday
-    noiselist=[0.0,0.1,0.5]
+    start_time = time.time()
+    #subfac=dt/86400.
+
     legsize=12
-
     #
     # random or organised
     #
@@ -223,7 +230,9 @@ if __name__ == '__main__':
     
     nrun=[0]
     plt.figure(1)
+    print ("meth1")
     diffusion(Lrun,1,nrun,noiser=0.0,Ldomain=Ldomain,subopt=subopt,nplot=3)
+    print ("meth2")
     diffusion(Lrun,2,nrun,noiser=0.0,Ldomain=Ldomain,subopt=subopt,nplot=3)
     fig_trimmings(3)
     
@@ -231,7 +240,8 @@ if __name__ == '__main__':
     plt.legend(['Organised','Random'],loc=7,frameon=False,prop={'size':legsize})
     plt.savefig('diffusion_random_organised_subopt'+str(subopt)+'.pdf')
     plt.clf()
-
+    print("--- %s seconds ---" % (time.time() - start_time))
+    exit()
     # 
     # MAX + noise 
     #
@@ -258,7 +268,6 @@ if __name__ == '__main__':
     # 
     # 80% percentile + noise
     #
-    print('percentile-organised')
 
     nrun=[0]
     plt.figure(1)
