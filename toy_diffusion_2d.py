@@ -41,14 +41,15 @@ def diffusion(fld,a0,a1,ndiff):
         fld=np.roll(fld,-1,axis=0) # 2 to 1, 1 to 0 and 0 overwritten
     return(fld)
 
-def map_plot(fld,title,day,ifig,exp,vmin,vmax,loc):
+def map_plot(x,y,fld,title,day,ifig,exp,vmin,vmax,loc):
     fig,ax=plt.subplots()
-    
-    img=ax.pcolormesh(fld,cmap='Spectral',vmin=vmin,vmax=vmax)
+    print (vmin,vmax)
+    img=ax.pcolormesh(x,y,fld,cmap='Spectral',vmin=vmin,vmax=vmax)
     ax.set_title(title+" : day "+day)
     #ax.axis([x.min(), x.max(), y.min(), y.max()])
     ax.set_xlabel('km', fontsize=15)
     ax.set_ylabel('km', fontsize=15)
+    ax.set_ylim(0,500)
     # fudge on resolution
     ax.scatter(2*loc[:,1],2*loc[:,0],s=10,marker="s",zorder=1,color="black",edgecolors="white")
     plt.colorbar(img,ax=ax)
@@ -64,14 +65,15 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12}):
     tau_sub=args["tau_sub"]
     crh_ad=args["crh_ad"]
 
-    lplot=False
+    lplot=True
 
-    nfig_hr=1e6
+    nfig_hr=6
     sfig_day=0
 
     # domain size in m
-    domain_x=300.e3
-    domain_y=300.e3
+    
+    global domain_x,domain_y
+    domain_x=domain_y=500.e3
     dx=2000.
     dy=2000.
 
@@ -121,7 +123,7 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12}):
     diurn_p=4
     diurn_o=0.35
 
-    odir="./"
+    odir="../plots/"
 
     ltest=False
     
@@ -141,28 +143,30 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12}):
 
     nstepstats=int(min(nday,ndaystats)/dt)
     
-    #try:
-    #    os.mkdir(odir)
-    #except:
-    #    pass
+    try:
+        os.mkdir(odir)
+    except:
+        pass
 
     # will assume diffusion same in both directions:
     alfa=diffK*dtdiff/(dx*dx)
     alf0=(1.0-4.0*alfa)/(1.0+4.0*alfa) # level zero factor 
     alf1=2.*alfa/(1.0+4.0*alfa) # level 1 factor
-    print(" first alf",diffK,alfa,alf0,alf1)
+    # print(" first alf",diffK,alfa,alf0,alf1)
     alfacin=diffCIN*dtdiff/(dx*dx)
     alfcin0=(1.0-4.0*alfacin)/(1.0+4.0*alfacin) # level zero factor 
     alfcin1=2.*alfacin/(1.0+4.0*alfacin) # level 1 factor
 
-    print(" cin alf",alfcin0,alfcin1)
+    #print(" cin alf",alfcin0,alfcin1)
 
     cnv_death=min(dt/cnv_lifetime,1.0)
-    nx=int(domain_x/dx) ; ny=int(domain_y/dy)
+    nx=int(domain_x/dx)+1 ; ny=int(domain_y/dy)+1
     x1d=np.linspace(0,domain_x,nx)
     y1d=np.linspace(0,domain_x,nx)
     x,y=np.meshgrid(x1d/1000,y1d/1000) # grid in km
 
+    print (x1d)
+    
     # number of timesteps:
     nt=int(nday*86400/dt)
     times=np.arange(0,nt,1)
@@ -230,6 +234,7 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12}):
 
         ifig=0
 
+        # loop over time
         for it in range(nt):
             if (it*dt)%(24*3600)==0:
                 print ("day ",int(it*dt/86400.))
@@ -323,11 +328,11 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12}):
                 sday=str(day)
                 print("PLOT: day ",sday)
 
-                map_plot(cin[1,:,:],"CIN",sday,ifig,sdiurn,0,1,cnv_loc)
-                map_plot(crh[1,:,:],"CRH",sday,ifig,sdiurn,0,1,cnv_loc)
-                map_plot(prob,"P",sday,ifig,sdiurn,0,np.max(prob),cnv_loc)
-                map_plot(prob_cin,"P-CIN",sday,ifig,sdiurn,0,np.max(prob_cin),cnv_loc)
-                map_plot(prob_crh,"P-CRH",sday,ifig,sdiurn,0,np.max(prob_crh),cnv_loc)
+                map_plot(x,y,cin[1,:,:],"CIN",sday,ifig,sdiurn,0,1,cnv_loc)
+                map_plot(x,y,crh[1,:,:],"CRH",sday,ifig,sdiurn,0,1,cnv_loc)
+                map_plot(x,y,prob,"P",sday,ifig,sdiurn,0,np.max(prob),cnv_loc)
+                map_plot(x,y,prob_cin,"P-CIN",sday,ifig,sdiurn,0,np.max(prob_cin),cnv_loc)
+                map_plot(x,y,prob_crh,"P-CRH",sday,ifig,sdiurn,0,np.max(prob_crh),cnv_loc)
 
                 # correct these surface plots
                 if False:
@@ -373,8 +378,8 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12}):
 
     # end of run
     if lplot:
-        fig_ts.savefig("timeseries.png")
-        fig1.savefig("lineplot.png")
+        fig_ts.savefig(odir+"timeseries.png")
+        fig1.savefig(odir+"lineplot.png")
         plt.close(fig_ts)
         plt.close(fig1)
 
@@ -395,7 +400,7 @@ if __name__ == "__main__":
     try:
         opts, args = getopt.getopt(sys.argv[1:],"h",arglist)
     except getopt.GetoptError:
-        print (callexample)  
+        print ("args are:",arglist)  
         sys.exit(2)
     for opt, arg in opts:
         if opt in ("-h","--help"):
