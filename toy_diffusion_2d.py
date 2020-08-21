@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 from scipy.ndimage.filters import uniform_filter1d
+import scipy.spatial.distance as scidist
 import getopt, sys
 import os 
 import numpy as np
@@ -49,33 +50,39 @@ def map_plot(x,y,fld,title,day,ifig,exp,vmin,vmax,loc):
     #ax.axis([x.min(), x.max(), y.min(), y.max()])
     ax.set_xlabel('km', fontsize=15)
     ax.set_ylabel('km', fontsize=15)
-    ax.set_ylim(0,500)
+    ax.set_xlim(0,int(domain_x/1000.))
+    ax.set_ylim(0,int(domain_y/1000.))
     # fudge on resolution
-    ax.scatter(2*loc[:,1],2*loc[:,0],s=10,marker="s",zorder=1,color="black",edgecolors="white")
+    ax.scatter(dx/1000*loc[:,1],dy/1000*loc[:,0],s=10,marker="s",zorder=1,color="black",edgecolors="white")
     plt.colorbar(img,ax=ax)
     plt.savefig(odir+"map_"+title+"_"+exp+"_"+str(ifig).zfill(3)+".png")
     plt.close(fig)
 
 # PUT default values here in argument list dictionary :-) 
-def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12}):
+def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":10}):
     """main routine for diff 2d model"""
 
     global odir
     diffK=args["diffK"]
     tau_sub=args["tau_sub"]
     crh_ad=args["crh_ad"]
+    cin_radius=args["cin_radius"] # set to negative num to turn off coldpools
 
     lplot=True
 
-    nfig_hr=6
+    nfig_hr=24
     sfig_day=0
 
+
+    # cin_radius=20 # radius of coldpools in km (now passed as argument)
+    
     # domain size in m
     
-    global domain_x,domain_y
+    global domain_x,domain_y, dx, dy
     domain_x=domain_y=500.e3
-    dx=2000.
-    dy=2000.
+    dx=dy=2000.
+    dxkm=dx/1000.
+    
 
     # diurnal cycle: "none", "weak", "strong"
 
@@ -88,7 +95,7 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12}):
     crh_init=0.8
 
     # time integration days
-    nday=2
+    nday=30
 
     # end of run aver stats days 
     ndaystats=5
@@ -101,15 +108,15 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12}):
     # diffK=0.15*5*50e3    # DEFAULT :  0.4*5*50.e3
     
     # COLDPOOL: diffusion K=eps.u.L
-    diffCIN=0.15*10*20.e3 # DEFAULT 0.15*10*20.e3
+    diffCIN=0.25*10*50.e3 # DEFAULT 0.15*10*20.e3
 
     # timescale of subsidence and convection
     #tau_sub=20 # days
     tau_cnv=60. # seconds
-    tau_cin=12*3600. 
+    tau_cin=3*3600. # 3 hour lifetime for coldpools 
     cnv_lifetime=1800. # e-folding convection detrains for 30mins
+
     # thresh for cin inhibition 
-    cin_thresh=0.2
 
     # velocity scales
     w_cnv=10.
@@ -123,6 +130,7 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12}):
     diurn_p=4
     diurn_o=0.35
 
+    
     odir="../plots/"
 
     ltest=False
@@ -164,7 +172,9 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12}):
     x1d=np.linspace(0,domain_x,nx)
     y1d=np.linspace(0,domain_x,nx)
     x,y=np.meshgrid(x1d/1000,y1d/1000) # grid in km
+    allidx=np.argwhere(np.zeros([nx,ny])<1) # all true
 
+    
     print (x1d)
     
     # number of timesteps:
@@ -191,7 +201,7 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12}):
     axc=np.unravel_index(range(6),(2,3))
 
     #for sdiurn in diurn_opts:
-    for sdiurn in ["none"]:
+    for sdiurn in ["weak"]:
 
         #
         # set up envelope
@@ -254,7 +264,7 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12}):
             # First calculate residual N to generate this timestep
             ncnv_curr=np.sum(cnv_idx)
             ncnv_new=ncnv[it]-ncnv_curr
-            #print("current",ncnv_curr," new ",ncnv_new)
+            print("current",ncnv_curr,"ncnv ",ncnv[it]," new ",ncnv_new)
             if (ncnv_new<0):
                 #print ("negative cnv, sort this")
                 ncnv_new=0
@@ -263,22 +273,26 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12}):
             # now need to decide where to put the new events, 
             # bretherton updated CRH - with Craig adjustment
             prob_crh=np.exp(crh_ad*crh[1,:,:])-1.0
+            
             # fudge to stop 2 conv in one place, coldpool will sort
             prob_crh*=(1-cnv_idx)
             prob_crh/=np.mean(prob_crh)
 
             # INCLUDE cold pool here:
             #prob_cin=np.where(cin[1,:,:]>cin_thresh,0.0,1.0)
-            prob_cin=1.0-np.power(cin[1,:,:],0.15)
-            prob_cin/=np.mean(prob_cin)
-
+            #prob_cin=1.0-np.power(cin[1,:,:],0.15)
+            prob_cin=1.0-cin[1,:,:]
+            
             # product of 2:
-            prob=prob_crh  #*prob_cin # switch off coldpools here:
+            prob=prob_crh
+            if cin_radius>0:
+                prob*=prob_cin # switch off coldpools here:
             prob/=np.sum(prob) # normalized
             prob1d=prob.flatten()
 
             #
             # sample the index using the prob function
+            # and PLACE NEW EVENTS:
             #
             coords=np.random.choice(dummy_idx,ncnv_new,p=prob1d,replace=False)
             new_loc=np.unravel_index(coords,(nx,ny))
@@ -288,6 +302,7 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12}):
                 crh_in_new[it]=np.mean(slice[new_loc])
             crh_driest[it]=np.min(slice)
 
+
             # cnv_idx[mp,mp]=1 # TEST
 
             # update humidity
@@ -295,14 +310,33 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12}):
             crh[1,:,:]=(crh[1,:,:]+cnv_idx*crh_det*dt_tau_cnv)/(1.0+cnv_idx*dt_tau_cnv)
 
             #
-            #
             # update coldpool here
             #
-            cin[1,:,:]=cin[1,:,:]+cnv_idx # cnv sets to 1
-            #cin[1,:,:]*=dt_tau_cin_fac # implicit
-            cin[1,:,:]-=dt_tau_cin # explicit 
-            cin=diffusion(cin,alfcin0,alfcin1,ndiff)
-            cin=np.clip(cin,0,1)
+            if cin_radius>0:
+                cnv_coords=np.argwhere(cnv_idx)
+                ncnv_curr=np.sum(cnv_idx)
+                if ncnv_curr>0:
+                    distlist=[]
+                    for ioff in [0,nx]:
+                        for joff in [0,ny]:
+                            j=cnv_coords.copy()
+                            j[:,0]-=ioff
+                            j[:,1]-=joff
+                            distlist.append(scidist.cdist(allidx,j,metric='euclidean'))
+                    cnvdst=np.amin(np.dstack(distlist),(1,2)).reshape(nx,ny)
+                    cnvdst*=dxkm
+                else:
+                    cnvdst=np.ones([nx,ny])*1.e6
+
+                maskcin=np.where(cnvdst<cin_radius,1,0)
+                
+                cin[1,:,:]=cin[1,:,:]+maskcin # all conv points sets to 1
+                cin=np.clip(cin,0,1)
+
+            # cin[1,:,:]*=dt_tau_cin_fac # implicit
+                cin[1,:,:]-=dt_tau_cin # explicit 
+                cin=diffusion(cin,alfcin0,alfcin1,ndiff)            
+                cin=np.clip(cin,0,1)
 
             #
             # random death of cells.
@@ -378,7 +412,7 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12}):
 
     # end of run
     if lplot:
-        fig_ts.savefig(odir+"timeseries.png")
+        fig_ts.savefig(odir+"timeseries_"+sdiurn+".pdf")
         fig1.savefig(odir+"lineplot.png")
         plt.close(fig_ts)
         plt.close(fig1)
@@ -396,7 +430,7 @@ if __name__ == "__main__":
     crh_ad=16.12
     tau_sub=20. # days!
 
-    arglist=["help","diffK=","crh_ad=","tau_sub=","odir=","nfig_hr="]
+    arglist=["help","diffK=","crh_ad=","tau_sub=","odir=","cin_radius=","nfig_hr="]
     try:
         opts, args = getopt.getopt(sys.argv[1:],"h",arglist)
     except getopt.GetoptError:
@@ -410,6 +444,8 @@ if __name__ == "__main__":
             diffK = float(arg)
         elif opt in ("--crh_ad"):
             crh_ad = float(arg)
+        elif opt in ("--cin_radius"):
+            cin_radius = float(arg)
         elif opt in ("--tau_sub"):
             tau_sub = float(arg)
         elif opt in ("--nfig_hr"):
@@ -418,5 +454,5 @@ if __name__ == "__main__":
             odir = arg
 
     # pass args as a dictionary to ensure one arg only, two opts are missing, add later
-    args={"diffK":diffK,"tau_sub":tau_sub,"crh_ad":crh_ad}    
+    args={"diffK":diffK,"tau_sub":tau_sub,"crh_ad":crh_ad,"cin_radius":cin_radius}    
     main(args)
