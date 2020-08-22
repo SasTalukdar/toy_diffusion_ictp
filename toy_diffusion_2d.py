@@ -127,7 +127,7 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":10}):
 
     # fake diurnal cycle
     diurn_a=0.6
-    diurn_p=4
+    diurn_p=2
     diurn_o=0.35
 
     
@@ -189,7 +189,8 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":10}):
     diurn_opts={}
     diurn_opts["none"]=np.ones(nt)
     diurn_opts["weak"]=diurn_a*np.sin(np.pi*2*times*dt/86400.)+1.0
-    diurn_opts["strong"]=(diurn_opts["weak"]-diurn_o)**diurn_p+diurn_o
+    diurn_opts["strong"]=(np.sin(np.pi*2*times*dt/86400.)+1.0)**diurn_p
+    diurn_opts["strong"]=diurn_opts["strong"]/np.mean(diurn_opts["strong"]) # mean=1
 
     #
     # set up plots, timeseries
@@ -201,7 +202,7 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":10}):
     axc=np.unravel_index(range(6),(2,3))
 
     #for sdiurn in diurn_opts:
-    for sdiurn in ["weak"]:
+    for sdiurn in ["strong"]:
 
         #
         # set up envelope
@@ -213,6 +214,7 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":10}):
         # number of convective events as function of time
         # 
         ncnv=np.bincount(np.random.choice(times,ncnv_tot,p=pdiurn),minlength=nt)
+        ncnv_overflow=0 # storage for overflow 
         Nsmth=int(cnv_lifetime/dt) # need to smooth to lifetime of convection
         if Nsmth>1:
             ncnv=uniform_filter1d(ncnv,size=Nsmth)
@@ -263,11 +265,14 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":10}):
 
             # First calculate residual N to generate this timestep
             ncnv_curr=np.sum(cnv_idx)
-            ncnv_new=ncnv[it]-ncnv_curr
-            print("current",ncnv_curr,"ncnv ",ncnv[it]," new ",ncnv_new)
+            ncnv_new=ncnv[it]+ncnv_overflow-ncnv_curr
+            print("current",ncnv_curr,"ncnv ",ncnv[it]," overflow",ncnv_overflow," new ",ncnv_new)
+            ncnv_overflow=0 # overflow accounted for, so reset to zero
             if (ncnv_new<0):
-                #print ("negative cnv, sort this")
-                ncnv_new=0
+                # we have too many convection events still alive, so we borrow from a future
+                # timestep.
+                ncnv_overflow=ncnv_new  # store overflow
+                ncnv_new=0 #  can't have neg new events 
 
             #
             # now need to decide where to put the new events, 
@@ -317,14 +322,15 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":10}):
                 ncnv_curr=np.sum(cnv_idx)
                 if ncnv_curr>0:
                     distlist=[]
-                    for ioff in [0,nx]:
-                        for joff in [0,ny]:
+                    for ioff in [-nx,0,nx]:
+                        for joff in [-ny,0,ny]:
                             j=cnv_coords.copy()
-                            j[:,0]-=ioff
-                            j[:,1]-=joff
-                            distlist.append(scidist.cdist(allidx,j,metric='euclidean'))
-                    cnvdst=np.amin(np.dstack(distlist),(1,2)).reshape(nx,ny)
+                            j[:,0]+=ioff
+                            j[:,1]+=joff
+                            distlist.append(np.amin(scidist.cdist(allidx,j,metric='euclidean'),1))
+                    cnvdst=np.amin(np.stack(distlist),0).reshape(nx,ny)
                     cnvdst*=dxkm
+                    
                 else:
                     cnvdst=np.ones([nx,ny])*1.e6
 
