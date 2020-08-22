@@ -59,9 +59,10 @@ def map_plot(x,y,fld,title,day,ifig,exp,vmin,vmax,loc):
     plt.close(fig)
 
 # PUT default values here in argument list dictionary :-) 
-def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":10}):
+def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn_cases":"none"}):
     """main routine for diff 2d model"""
 
+    
     global odir
     diffK=args["diffK"]
     tau_sub=args["tau_sub"]
@@ -187,10 +188,10 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":10}):
 
     # 3 options of diurnal cycle!
     diurn_opts={}
-    diurn_opts["none"]=np.ones(nt)
-    diurn_opts["weak"]=diurn_a*np.sin(np.pi*2*times*dt/86400.)+1.0
-    diurn_opts["strong"]=(np.sin(np.pi*2*times*dt/86400.)+1.0)**diurn_p
-    diurn_opts["strong"]=diurn_opts["strong"]/np.mean(diurn_opts["strong"]) # mean=1
+    diurn_opts["n"]=np.ones(nt)
+    diurn_opts["w"]=diurn_a*np.sin(np.pi*2*times*dt/86400.)+1.0
+    diurn_opts["s"]=(np.sin(np.pi*2*times*dt/86400.)+1.0)**diurn_p
+    diurn_opts["s"]=diurn_opts["s"]/np.mean(diurn_opts["s"]) # mean=1
 
     #
     # set up plots, timeseries
@@ -201,8 +202,7 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":10}):
 
     axc=np.unravel_index(range(6),(2,3))
 
-    #for sdiurn in diurn_opts:
-    for sdiurn in ["strong"]:
+    for sdiurn in diurn_cases:
 
         #
         # set up envelope
@@ -435,7 +435,9 @@ if __name__ == "__main__":
     diffK=37500. # m2/s
     crh_ad=16.12
     tau_sub=20. # days!
-
+    cin_radius=-99. # switched off by default
+    diurn_cases="n"
+    
     arglist=["help","diffK=","crh_ad=","tau_sub=","odir=","cin_radius=","nfig_hr="]
     try:
         opts, args = getopt.getopt(sys.argv[1:],"h",arglist)
@@ -460,5 +462,6 @@ if __name__ == "__main__":
             odir = arg
 
     # pass args as a dictionary to ensure one arg only, two opts are missing, add later
-    args={"diffK":diffK,"tau_sub":tau_sub,"crh_ad":crh_ad,"cin_radius":cin_radius}    
+    args={"diffK":diffK,"tau_sub":tau_sub,"crh_ad":crh_ad,"cin_radius":cin_radius,
+          "diurn_cases":diurn_cases}    
     main(args)
