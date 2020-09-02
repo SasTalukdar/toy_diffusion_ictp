@@ -59,7 +59,7 @@ def map_plot(x,y,fld,title,day,ifig,exp,vmin,vmax,loc):
     plt.close(fig)
 
 # PUT default values here in argument list dictionary :-) 
-def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn_cases":"none"}):
+def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn_cases":"n"}):
     """main routine for diff 2d model"""
 
     
@@ -67,9 +67,10 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
     diffK=args["diffK"]
     tau_sub=args["tau_sub"]
     crh_ad=args["crh_ad"]
+    diurn_cases=args["diurn_cases"]
     cin_radius=args["cin_radius"] # set to negative num to turn off coldpools
 
-    lplot=True
+    lplot=False
 
     nfig_hr=24
     sfig_day=0
@@ -150,7 +151,7 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
     dt_tau_cin_fac=1.0+dt/tau_cin
     dt_tau_cin=dt/tau_cin
 
-    nstepstats=int(min(nday,ndaystats)/dt)
+    nstepstats=int(min(nday,ndaystats)*86400./dt)
     
     try:
         os.mkdir(odir)
@@ -460,6 +461,8 @@ if __name__ == "__main__":
             nfig_hr = int(arg)
         elif opt in ("--odir"):
             odir = arg
+
+    print ("diurn_cases",diurn_cases)
 
     # pass args as a dictionary to ensure one arg only, two opts are missing, add later
     args={"diffK":diffK,"tau_sub":tau_sub,"crh_ad":crh_ad,"cin_radius":cin_radius,
