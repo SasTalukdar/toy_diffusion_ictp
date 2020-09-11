@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 from scipy.ndimage.filters import uniform_filter1d
 from scipy import spatial
 import getopt, sys
-import os time
+import os, time
 import numpy as np
 from netCDF4 import Dataset
 #
@@ -71,7 +71,7 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
     diurn_cases=args["diurn_cases"]
     cin_radius=args["cin_radius"] # set to negative num to turn off coldpools
 
-    lplot=True
+    lplot=False
 
     nfig_hr=24
     sfig_day=0
@@ -178,36 +178,36 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
     allidx=np.argwhere(np.zeros([nx,ny])<1) # all true
 
     # open the netcdf files:
-    nc1=Dataset("maps_2d.nc", "w", format="NETCDF4")
+    nc1 = Dataset("maps_2d.nc", "w", format="NETCDF4")
 
     # dims:                  
-    nctime = nc1.createDimension("time", None)
-    ncx = nc1.createDimension("x", ny)
-    nxy = nc1.createDimension("y", nx)
+    time = nc1.createDimension("time", None)
+    nccnt = 0 # counter for ncindex
+    x = nc1.createDimension("x", ny)
+    y = nc1.createDimension("y", nx)
 
     # vars
-    times = nc1.createVariable("time","f8",("time",))
-    ncy = nc1.createVariable("lat","f4",("lat",))
-    ncx = nc1.createVariable("lon","f4",("lon",))
+    nctimes = nc1.createVariable("time","f8",("time",))
+    ncx = nc1.createVariable("Xdim","f4",("x",))
+    ncy = nc1.createVariable("Ydim","f4",("y",))
     # two dimensions unlimited
-    CRH=nc1.createVariable("Column RH","f4",("time","lat","lon",))
-    CRH.units = "fraction"
+    ncCRH=nc1.createVariable("Column RH","f4",("time","y","x",))
+    ncCRH.units = "fraction"
     
     nc1.description = "2d snapshots"
-    nc1.history = "Created " + time.ctime(time.time())
+    nc1.history = "Created today "
     nc1.source = "Adrian Tompkins (tompkins@ictp.it)"
 
     ncy.units = "km"
     ncx.units = "km"
-    times.units = "hours since 2000-01-01 00:00:00.0"
-    times.calendar = "gregorian"
+    nctimes.units = "hours since 2000-01-01 00:00:00.0"
+    nctimes.calendar = "gregorian"
 
-    ncy[:] = y1d
-    ncx[:] = lons
+    ncy[:]=y1d
+    ncx[:]=x1d
     
     # file 2 is the timeseries file
 
-    
     print (x1d)
     
     # number of timesteps:
@@ -408,42 +408,46 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
 
             # plots
             day=it*dt/86400
-            if lplot and (it*dt)%(nfig_hr*3600)==0 and day>sfig_day:
-                nctime(
+            if (it*dt)%(nfig_hr*3600)==0:
+                nctimes[nccnt]=it
+                ncCRH[nccnt,:,:]=crh[1,:,:]     
+                nccnt+=1
 
-                
                 sday=str(day)
-                print("PLOT: day ",sday)
 
-                map_plot(x,y,cin[1,:,:],"CIN",sday,ifig,sdiurn,0,1,cnv_loc)
-                map_plot(x,y,crh[1,:,:],"CRH",sday,ifig,sdiurn,0,1,cnv_loc)
-                map_plot(x,y,prob,"P",sday,ifig,sdiurn,0,np.max(prob),cnv_loc)
-                map_plot(x,y,prob_cin,"P-CIN",sday,ifig,sdiurn,0,np.max(prob_cin),cnv_loc)
-                map_plot(x,y,prob_crh,"P-CRH",sday,ifig,sdiurn,0,np.max(prob_crh),cnv_loc)
+                if lplot and (it*dt)%(nfig_hr*3600)==0 and day>sfig_day:
 
-                # correct these surface plots
-                if False:
-                    fig=plt.figure()
-                    ax=plt.axes(projection='3d')
-                    ax.plot_surface(x,y,crh[1,:,:],cmap='viridis', edgecolor='none')
-                    ax.set_title('CRH: day '+str(ifig*nfig_hr/24))
-                    ax.set_zlim([0.4,1])
-                    fig.savefig("crh_3d_"+str(ifig).zfill(3)+".png")
-                    plt.close(fig)
+                    print("PLOT: day ",sday)        
+                    map_plot(x,y,cin[1,:,:],"CIN",sday,ifig,sdiurn,0,1,cnv_loc)
+                    map_plot(x,y,crh[1,:,:],"CRH",sday,ifig,sdiurn,0,1,cnv_loc)
+                    map_plot(x,y,prob,"P",sday,ifig,sdiurn,0,np.max(prob),cnv_loc)
+                    map_plot(x,y,prob_cin,"P-CIN",sday,ifig,sdiurn,0,np.max(prob_cin),cnv_loc)
+                    map_plot(x,y,prob_crh,"P-CRH",sday,ifig,sdiurn,0,np.max(prob_crh),cnv_loc)
 
-                    fig=plt.figure()
-                    ax=plt.axes(projection='3d')
-                    ax.plot_surface(x,y,cin[1,:,:],cmap='viridis', edgecolor='none')
-                    ax.set_title('CIN p: day '+str(ifig*nfig_hr/24))
-                    ax.set_zlim([0,1])
-                    fig.savefig("cin_3d_"+str(ifig).zfill(3)+".png")
-                    plt.close(fig)
+                    # correct these surface plots
+                    if False:
+                        fig=plt.figure()
+                        ax=plt.axes(projection='3d')
+                        ax.plot_surface(x,y,crh[1,:,:],cmap='viridis', edgecolor='none')
+                        ax.set_title('CRH: day '+str(ifig*nfig_hr/24))
+                        ax.set_zlim([0.4,1])
+                        fig.savefig("crh_3d_"+str(ifig).zfill(3)+".png")
+                        plt.close(fig)
 
-                # line plot
-                ax1.plot(x[mp,mp-40:mp+40],crh[1,mp,mp-40:mp+40])
-                ax1.plot(x[mp,mp-40:mp+40],cin[1,mp,mp-40:mp+40])
+                        fig=plt.figure()
+                        ax=plt.axes(projection='3d')
+                        ax.plot_surface(x,y,cin[1,:,:],cmap='viridis', edgecolor='none')
+                        ax.set_title('CIN p: day '+str(ifig*nfig_hr/24))
+                        ax.set_zlim([0,1])
+                        fig.savefig("cin_3d_"+str(ifig).zfill(3)+".png")
+                        plt.close(fig)
 
-                ifig+=1
+                    # line plot
+                    ax1.plot(x[mp,mp-40:mp+40],crh[1,mp,mp-40:mp+40])
+                    ax1.plot(x[mp,mp-40:mp+40],cin[1,mp,mp-40:mp+40])
+
+                    ifig+=1
+
 
         if lplot:
             ax_ts[0,1].plot(days,crh_mean,label=sdiurn)
@@ -469,9 +473,13 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
         fig1.savefig(odir+"lineplot.png")
         plt.close(fig_ts)
         plt.close(fig1)
+    nc1.close()
+
+
 
     # dump mean stats here:
     end_std=np.mean(crh_std[-nstepstats:])
+
     f=open("diffusion_results.txt","a")
     f.write("%8.1f %5.2f %5.2f %15.8f \n" % (diffK,tau_sub/86400.,crh_ad,end_std))
     f.close()
