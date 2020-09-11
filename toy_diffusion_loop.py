@@ -20,12 +20,14 @@ def main(argv):
     diffK=[37500]
     crh_ad=[16.12]
     tau_sub=[20]
+    cin_radius=[-99] # turned off by default
+    diurn_cases=["n"] # default value for all runs
 
     # other defaults
     nfig_hr=6
     odir="./"
 
-    arglist=["help","diffK=","crh_ad=","tau_sub=","odir=","nfig_hr="]
+    arglist=["help","diffK=","crh_ad=","tau_sub=","odir=","nfig_hr=","cin_radius"]
     try:
         opts, args = getopt.getopt(argv,"h",arglist)
     except getopt.GetoptError:
@@ -43,13 +45,15 @@ def main(argv):
             crh_ad = ast.literal_eval(arg)
         elif opt in ("--tau_sub"):
             tau_sub = ast.literal_eval(arg)
+        elif opt in ("--cin_radius"):
+            cin_radius = ast.literal_eval(arg)
         elif opt in ("--nfig_hr"):
             nfig_hr = int(arg)
         elif opt in ("--odir"):
             odir = arg
 
     # make a list of dictionaries with ALL combinations of the 3 arguments
-    arglist=[{"diffK":d,"tau_sub":t,"crh_ad":c,"nfig_hr":nfig_hr,"odir":odir} for d in diffK for t in tau_sub for c in crh_ad]    
+    arglist=[{"diffK":d,"tau_sub":t,"crh_ad":c,"nfig_hr":nfig_hr,"odir":odir,"cin_radius":cr,"diurn_cases":diurn_cases} for d in diffK for t in tau_sub for c in crh_ad for cr in cin_radius]    
     #
 
     # now farm out the jobs over the triple loop
