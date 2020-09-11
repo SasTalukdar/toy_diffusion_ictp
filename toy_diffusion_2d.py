@@ -98,11 +98,8 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
     crh_init=0.8
 
     # time integration days
-    nday=30
+    nday=5
 
-    # end of run aver stats days 
-    ndaystats=5
-    
     # convective detrained value
     # this is 1+IWP/PW, IWP max ~ 3kg/m**2 for 60kg/m**2
     crh_det=1.05
@@ -152,8 +149,6 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
     dt_tau_cin_fac=1.0+dt/tau_cin
     dt_tau_cin=dt/tau_cin
 
-    nstepstats=int(min(nday,ndaystats)*86400./dt)
-    
     try:
         os.mkdir(odir)
     except:
@@ -178,33 +173,53 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
     allidx=np.argwhere(np.zeros([nx,ny])<1) # all true
 
     # open the netcdf files:
-    nc1 = Dataset("maps_2d.nc", "w", format="NETCDF4")
+    nc1 = Dataset("td_maps_2d.nc", "w", format="NETCDF4")
+    nc2 = Dataset("td_stats.nc", "w", format="NETCDF4")
 
     # dims:                  
-    time = nc1.createDimension("time", None)
+    time1=nc1.createDimension("time", None)
+    x1=nc1.createDimension("x", ny)
+    y1=nc1.createDimension("y", nx)
     nccnt = 0 # counter for ncindex
-    x = nc1.createDimension("x", ny)
-    y = nc1.createDimension("y", nx)
 
     # vars
-    nctimes = nc1.createVariable("time","f8",("time",))
-    ncx = nc1.createVariable("Xdim","f4",("x",))
-    ncy = nc1.createVariable("Ydim","f4",("y",))
+    var_time1 = nc1.createVariable("time","f8",("time",))
+    var_x = nc1.createVariable("X","f4",("x",))
+    var_y = nc1.createVariable("Y","f4",("y",))
     # two dimensions unlimited
-    ncCRH=nc1.createVariable("Column RH","f4",("time","y","x",))
-    ncCRH.units = "fraction"
+    var_CRH=nc1.createVariable("CRH","f4",("time","y","x",))
+    var_CRH.units = "fraction"
+
+    # timeseries file
+    dim_time2 = nc2.createDimension("time", None)
+    var_time2 = nc2.createVariable("time","f8",("time",))
+    crh_mean = nc2.createVariable("CRH_mean","f8",("time",))
+    crh_std = nc2.createVariable("CRH_std","f8",("time",))
+    crh_in_new = nc2.createVariable("CRH_new_conv","f8",("time",))
+    crh_driest = nc2.createVariable("CRH_driest","f8",("time",))
+
+    nc1.description="2d snapshots"
+    nc1.history="Created today "
+    nc1.source="Adrian Tompkins (tompkins@ictp.it)"
+    nc1.diffK=nc2.diffK=diffK
+    nc1.tau_sub=nc2.tau_sub=tau_sub
+    nc1.crh_ad=nc2.crh_ad=crh_ad
+    nc1.crh_det=nc2.crh_det=crh_det
+    nc1.cin_radius=nc2.cin_radius=cin_radius
+    nc1.crh_init=nc2.crh_init=crh_init
+    nc1.cnv_lifetime=nc2.cnv_lifetime=cnv_lifetime
+    nc1.tau_cnv=nc2.tau_cnv=tau_cnv
+    nc1.tau_cin=nc2.tau_cin=tau_cin
+    nc1.diffCIN=nc2.diffCIN=diffCIN
+    nc1.w_cnv=nc2.w_cnv=w_cnv
     
-    nc1.description = "2d snapshots"
-    nc1.history = "Created today "
-    nc1.source = "Adrian Tompkins (tompkins@ictp.it)"
+    var_y.units = "km"
+    var_x.units = "km"
+    var_time1.units=var_time2.units="seconds since 2000-01-01 00:00:00.0"
+    var_time1.calendar=var_time2.calendar="gregorian"
 
-    ncy.units = "km"
-    ncx.units = "km"
-    nctimes.units = "hours since 2000-01-01 00:00:00.0"
-    nctimes.calendar = "gregorian"
-
-    ncy[:]=y1d
-    ncx[:]=x1d
+    var_y[:]=y1d
+    var_x[:]=x1d
     
     # file 2 is the timeseries file
 
@@ -270,12 +285,6 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
 
         dummy_idx=np.arange(0,nx*ny,1)
 
-        crh_mean=np.zeros(nt)
-        crh_std=np.zeros(nt)
-        crh_in_new=np.zeros(nt)
-        crh_in_new[:]=np.nan
-        crh_driest=np.zeros(nt)
-
         ifig=0
 
         # loop over time
@@ -298,7 +307,7 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
             # First calculate residual N to generate this timestep
             ncnv_curr=np.sum(cnv_idx)
             ncnv_new=ncnv[it]+ncnv_overflow-ncnv_curr
-            print("current",ncnv_curr,"ncnv ",ncnv[it]," overflow",ncnv_overflow," new ",ncnv_new)
+            #print("current",ncnv_curr,"ncnv ",ncnv[it]," overflow",ncnv_overflow," new ",ncnv_new)
             ncnv_overflow=0 # overflow accounted for, so reset to zero
             if (ncnv_new<0):
                 # we have too many convection events still alive, so we borrow from a future
@@ -400,17 +409,19 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
             #crh=np.roll(crh,-1,axis=2) # 2 to 1, 1 to 0 and 0 overwritten
             #cin=np.roll(cin,-1,axis=2) # 2 to 1, 1 to 0 and 0 overwritten
 
-            crh_mean[it]=np.mean(crh[1,:,:])
-            crh_std[it]=np.std(crh[1,:,:])
 
             #
             cnv_loc=np.argwhere(cnv_idx==1)    
 
-            # plots
+            # netcdf output
+            var_time2[it]=it*dt
+            crh_mean[it]=np.mean(crh[1,:,:])
+            crh_std[it]=np.std(crh[1,:,:])
+
             day=it*dt/86400
             if (it*dt)%(nfig_hr*3600)==0:
-                nctimes[nccnt]=it
-                ncCRH[nccnt,:,:]=crh[1,:,:]     
+                var_time1[nccnt]=it*dt
+                var_CRH[nccnt,:,:]=crh[1,:,:]     
                 nccnt+=1
 
                 sday=str(day)
@@ -474,15 +485,7 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
         plt.close(fig_ts)
         plt.close(fig1)
     nc1.close()
-
-
-
-    # dump mean stats here:
-    end_std=np.mean(crh_std[-nstepstats:])
-
-    f=open("diffusion_results.txt","a")
-    f.write("%8.1f %5.2f %5.2f %15.8f \n" % (diffK,tau_sub/86400.,crh_ad,end_std))
-    f.close()
+    nc2.close()
 
 if __name__ == "__main__":
 
