@@ -1,10 +1,10 @@
 import matplotlib.pyplot as plt
 from scipy.ndimage.filters import uniform_filter1d
-import scipy.spatial.distance as scidist
+from scipy import spatial
 import getopt, sys
-import os 
+import os time
 import numpy as np
-
+from netCDF4 import Dataset
 #
 # this is a new version of the diffusion code in 2D
 # I decided to rewite from scratch as the plotting and structure were
@@ -57,6 +57,7 @@ def map_plot(x,y,fld,title,day,ifig,exp,vmin,vmax,loc):
     plt.colorbar(img,ax=ax)
     plt.savefig(odir+"map_"+title+"_"+exp+"_"+str(ifig).zfill(3)+".png")
     plt.close(fig)
+    
 
 # PUT default values here in argument list dictionary :-) 
 def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn_cases":"none"}):
@@ -69,6 +70,7 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
     crh_ad=args["crh_ad"]
     cin_radius=args["cin_radius"] # set to negative num to turn off coldpools
 
+
     lplot=True
 
     nfig_hr=24
@@ -76,15 +78,15 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
 
 
     # cin_radius=20 # radius of coldpools in km (now passed as argument)
-    
+
     # domain size in m
     
     global domain_x,domain_y, dx, dy
     domain_x=domain_y=500.e3
     dx=dy=2000.
     dxkm=dx/1000.
+    cin_radius/=dxkm
     
-
     # diurnal cycle: "none", "weak", "strong"
 
     # timestep
@@ -174,6 +176,36 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
     y1d=np.linspace(0,domain_x,nx)
     x,y=np.meshgrid(x1d/1000,y1d/1000) # grid in km
     allidx=np.argwhere(np.zeros([nx,ny])<1) # all true
+
+    # open the netcdf files:
+    nc1=Dataset("maps_2d.nc", "w", format="NETCDF4")
+
+    # dims:                  
+    nctime = nc1.createDimension("time", None)
+    ncx = nc1.createDimension("x", ny)
+    nxy = nc1.createDimension("y", nx)
+
+    # vars
+    times = nc1.createVariable("time","f8",("time",))
+    ncy = nc1.createVariable("lat","f4",("lat",))
+    ncx = nc1.createVariable("lon","f4",("lon",))
+    # two dimensions unlimited
+    CRH=nc1.createVariable("Column RH","f4",("time","lat","lon",))
+    CRH.units = "fraction"
+    
+    nc1.description = "2d snapshots"
+    nc1.history = "Created " + time.ctime(time.time())
+    nc1.source = "Adrian Tompkins (tompkins@ictp.it)"
+
+    ncy.units = "km"
+    ncx.units = "km"
+    times.units = "hours since 2000-01-01 00:00:00.0"
+    times.calendar = "gregorian"
+
+    ncy[:] = y1d
+    ncx[:] = lons
+    
+    # file 2 is the timeseries file
 
     
     print (x1d)
@@ -321,15 +353,27 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
                 cnv_coords=np.argwhere(cnv_idx)
                 ncnv_curr=np.sum(cnv_idx)
                 if ncnv_curr>0:
-                    distlist=[]
-                    for ioff in [-nx,0,nx]:
-                        for joff in [-ny,0,ny]:
-                            j=cnv_coords.copy()
-                            j[:,0]+=ioff
-                            j[:,1]+=joff
-                            distlist.append(np.amin(scidist.cdist(allidx,j,metric='euclidean'),1))
-                    cnvdst=np.amin(np.stack(distlist),0).reshape(nx,ny)
-                    cnvdst*=dxkm
+                    #distlist=[]
+                    #for ioff in [-nx,0,nx]:
+                    #    for joff in [-ny,0,ny]:
+                    #        j=cnv_coords.copy()
+                    #        j[:,0]+=ioff
+                    #        j[:,1]+=joff
+                    #        distlist.append(np.amin(scidist.cdist(allidx,j,metric='euclidean'),1))
+                    #cnvdst=np.amin(np.stack(distlist),0).reshape(nx,ny)
+                    #cnvdst*=dxkm
+                    for xoff in [0,nx,-nx]:
+                        for yoff in [0,-ny,ny]:
+                            if xoff==0 and yoff==0:
+                                j9=cnv_coords.copy()
+                            else:
+                                jo=cnv_coords.copy()
+                                jo[:,0]+=xoff
+                                jo[:,1]+=yoff
+                                j9=np.vstack((j9,jo))
+                    tree=spatial.cKDTree(j9)
+                    cnvdst,minidx=tree.query(allidx)
+                    cnvdst=cnvdst.reshape([nx,ny])
                     
                 else:
                     cnvdst=np.ones([nx,ny])*1.e6
@@ -365,6 +409,9 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
             # plots
             day=it*dt/86400
             if lplot and (it*dt)%(nfig_hr*3600)==0 and day>sfig_day:
+                nctime(
+
+                
                 sday=str(day)
                 print("PLOT: day ",sday)
 
