@@ -5,6 +5,7 @@ import getopt, sys
 import os, time
 import numpy as np
 from netCDF4 import Dataset
+
 #
 # this is a new version of the diffusion code in 2D
 # I decided to rewite from scratch as the plotting and structure were
@@ -223,8 +224,6 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
     
     # file 2 is the timeseries file
 
-    print (x1d)
-    
     # number of timesteps:
     nt=int(nday*86400/dt)
     times=np.arange(0,nt,1)
