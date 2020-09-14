@@ -1,0 +1,26 @@
+def map_plot(x,y,fld,title,day,ifig,exp,vmin,vmax,loc):
+    fig,ax=plt.subplots()
+    print (vmin,vmax)
+    img=ax.pcolormesh(x,y,fld,cmap='Spectral',vmin=vmin,vmax=vmax)
+    ax.set_title(title+" : day "+day)
+    #ax.axis([x.min(), x.max(), y.min(), y.max()])
+    ax.set_xlabel('km', fontsize=15)
+    ax.set_ylabel('km', fontsize=15)
+    ax.set_xlim(0,int(domain_x/1000.))
+    ax.set_ylim(0,int(domain_y/1000.))
+    # fudge on resolution
+    ax.scatter(dx/1000*loc[:,1],dy/1000*loc[:,0],s=10,marker="s",zorder=1,color="black",edgecolors="white")
+    plt.colorbar(img,ax=ax)
+    plt.savefig(odir+"map_"+title+"_"+exp+"_"+str(ifig).zfill(3)+".png")
+    plt.close(fig)
+
+
+
+    # other plot stuff
+
+    
+    if lplot:
+        fig1,ax1=plt.subplots()
+        fig_ts,ax_ts=plt.subplots(nrows=3,ncols=2,sharex=True)
+
+    axc=np.unravel_index(range(6),(2,3))
