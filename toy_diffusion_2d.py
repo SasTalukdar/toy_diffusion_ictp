@@ -48,13 +48,15 @@ def diffusion(fld,a0,a1,ndiff):
 def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn_cases":"n"}):
     """main routine for diff 2d model"""
 
-    
+
     global odir
     diffK=args["diffK"]
     tau_sub=args["tau_sub"]
     crh_ad=args["crh_ad"]
     diurn_cases=args["diurn_cases"]
     cin_radius=args["cin_radius"] # set to negative num to turn off coldpools
+
+    tab=str(diffK)+"_"+str(tau_sub)+"_"+str(crh_ad)+"_"+str(diurn_cases)+"_"+str(cin_radius)
 
     nfig_hr=24
     sfig_day=0
@@ -156,8 +158,8 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
     allidx=np.argwhere(np.zeros([nx,ny])<1) # all true
 
     # open the netcdf files:
-    nc1 = Dataset("td_maps_2d.nc", "w", format="NETCDF4")
-    nc2 = Dataset("td_stats.nc", "w", format="NETCDF4")
+    nc1 = Dataset("td_maps_"+tab+".nc", "w", format="NETCDF4")
+    nc2 = Dataset("td_stats_"+tab+".nc", "w", format="NETCDF4")
 
     # dims:                  
     time1=nc1.createDimension("time", None)
@@ -440,4 +442,5 @@ if __name__ == "__main__":
     # pass args as a dictionary to ensure one arg only, two opts are missing, add later
     args={"diffK":diffK,"tau_sub":tau_sub,"crh_ad":crh_ad,"cin_radius":cin_radius,
           "diurn_cases":diurn_cases}    
+
     main(args)
