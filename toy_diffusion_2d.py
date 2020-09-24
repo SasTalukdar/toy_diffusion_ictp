@@ -5,6 +5,7 @@ import getopt, sys
 import os, time
 import numpy as np
 from netCDF4 import Dataset
+import ast 
 
 #
 # this is a new version of the diffusion code in 2D
@@ -53,17 +54,17 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
     diffK=args["diffK"]
     tau_sub=args["tau_sub"]
     crh_ad=args["crh_ad"]
-    diurn_cases=args["diurn_cases"]
+    diurn_cases=ast.literal_eval(args["diurn_cases"])
     cin_radius=args["cin_radius"] # set to negative num to turn off coldpools
 
-    tab=str(diffK)+"_"+str(tau_sub)+"_"+str(crh_ad)+"_"+str(diurn_cases)+"_"+str(cin_radius)
+    tab=str(diffK)+"_"+str(tau_sub)[0:6]+"_"+str(crh_ad)+"_"+diurn_cases[0]+"_"+str(cin_radius)
+
 
     nfig_hr=24
     sfig_day=0
 
 
     # cin_radius=20 # radius of coldpools in km (now passed as argument)
-
     # domain size in m
     
     global domain_x,domain_y, dx, dy
@@ -157,6 +158,8 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
     x,y=np.meshgrid(x1d/1000,y1d/1000) # grid in km
     allidx=np.argwhere(np.zeros([nx,ny])<1) # all true
 
+    print ("opening output"),tab
+
     # open the netcdf files:
     nc1 = Dataset("td_maps_"+tab+".nc", "w", format="NETCDF4")
     nc2 = Dataset("td_stats_"+tab+".nc", "w", format="NETCDF4")
@@ -192,7 +195,7 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
     nc1.source="Adrian Tompkins (tompkins@ictp.it)"
     nc1.diffK=nc2.diffK=diffK
     nc1.tau_sub=nc2.tau_sub=tau_sub
-    nc1.crh_ad=nc2.crh_ad=crh_ad
+    nc1.crh_ad=nc2.crh_ad=float(crh_ad)
     nc1.crh_det=nc2.crh_det=crh_det
     nc1.cin_radius=nc2.cin_radius=cin_radius
     nc1.crh_init=nc2.crh_init=crh_init
@@ -209,7 +212,8 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
 
     var_y[:]=y1d
     var_x[:]=x1d
-    
+
+    print ("opening file 2")    
     # file 2 is the timeseries file
 
     # number of timesteps:
