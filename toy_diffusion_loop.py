@@ -21,7 +21,7 @@ def main(argv):
     crh_ad=[16.12]
     tau_sub=[20]
     cin_radius=[-99] # turned off by default
-    diurn_cases=["n"] # default value for all runs
+    diurn_cases=['n','w'] # default value for all runs
 
     # other defaults
     nfig_hr=6
@@ -32,7 +32,6 @@ def main(argv):
         opts, args = getopt.getopt(argv,"h",arglist)
     except getopt.GetoptError:
         print (argv)
-        print (callexample)  
         sys.exit(2)
 
     for opt, arg in opts:

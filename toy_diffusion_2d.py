@@ -46,7 +46,7 @@ def diffusion(fld,a0,a1,ndiff):
 
 
 # PUT default values here in argument list dictionary :-) 
-def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn_cases":"n"}):
+def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn_cases":["n"]}):
     """main routine for diff 2d model"""
 
 
@@ -54,10 +54,15 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
     diffK=args["diffK"]
     tau_sub=args["tau_sub"]
     crh_ad=args["crh_ad"]
-    diurn_cases=ast.literal_eval(args["diurn_cases"])
+    print (args["diurn_cases"],"ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd")
+
+
+    s=args["diurn_cases"]
+    print(s[0])
+    exit()
     cin_radius=args["cin_radius"] # set to negative num to turn off coldpools
 
-    tab=str(diffK)+"_"+str(tau_sub)[0:6]+"_"+str(crh_ad)+"_"+diurn_cases[0]+"_"+str(cin_radius)
+    tab=str(diffK)+"_"+str(tau_sub)[0:6]+"_"+str(crh_ad)+"_"+"_"+str(cin_radius)
 
 
     nfig_hr=24
