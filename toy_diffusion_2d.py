@@ -54,15 +54,12 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
     diffK=args["diffK"]
     tau_sub=args["tau_sub"]
     crh_ad=args["crh_ad"]
-    print (args["diurn_cases"],"ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd")
-
 
     s=args["diurn_cases"]
-    print(s[0])
-    exit()
+
     cin_radius=args["cin_radius"] # set to negative num to turn off coldpools
 
-    tab=str(diffK)+"_"+str(tau_sub)[0:6]+"_"+str(crh_ad)+"_"+"_"+str(cin_radius)
+    tab="diffK"+str(diffK)+"_tausub"+str(tau_sub)[0:6]+"_crhad"+str(crh_ad)+"_cinrad"+str(cin_radius)
 
 
     nfig_hr=24
