@@ -21,7 +21,7 @@ def main(argv):
     crh_ad=[16.12]
     tau_sub=[20]
     cin_radius=[-99] # turned off by default
-    diurn_cases=['n','w'] # default value for all runs
+    diurn_cases=[0] # default value for all runs
 
     # other defaults
     nfig_hr=6
@@ -52,7 +52,7 @@ def main(argv):
             odir = arg
 
     # make a list of dictionaries with ALL combinations of the 3 arguments
-    arglist=[{"diffK":d,"tau_sub":t,"crh_ad":c,"nfig_hr":nfig_hr,"odir":odir,"cin_radius":cr,"diurn_cases":diurn_cases} for d in diffK for t in tau_sub for c in crh_ad for cr in cin_radius]    
+    arglist=[{"diffK":d,"tau_sub":t,"crh_ad":c,"nfig_hr":nfig_hr,"odir":odir,"cin_radius":cr,"diurn_cases":dc} for d in diffK for t in tau_sub for c in crh_ad for cr in cin_radius for dc in diurn_cases ]    
     #
 
     # now farm out the jobs over the triple loop
