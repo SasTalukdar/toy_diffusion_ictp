@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 from scipy.ndimage.filters import uniform_filter1d
 from scipy import spatial
 import getopt, sys
+from datetime import datetime
 import os, time
 import numpy as np
 from netCDF4 import Dataset
@@ -113,7 +114,7 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
     # fake diurnal cycle
     diurn_a=0.6
     diurn_p=2
-    diurn_o=0.35
+    # diurn_o=0.35
 
     
     odir="../plots/"
@@ -189,9 +190,13 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
     crh_in_new = nc2.createVariable("CRH_new_conv","f8",("time",))
     crh_driest = nc2.createVariable("CRH_driest","f8",("time",))
 
-    nc1.description="2d snapshots"
-    nc1.history="Created today "
-    nc1.source="Adrian Tompkins (tompkins@ictp.it)"
+    # Global attributes here for both files:
+    nc1.description="2D diffusion model, 2d slice snapshots"
+    nc2.description="2D diffusion model, Timeseries statistics"
+    nc1.history=nc2.history="Created "+datetime.today().strftime('%Y-%m-%d')
+    nc1.source=nc2.source="Adrian Tompkins (tompkins@ictp.it)"
+
+    # parameter settings:
     nc1.diffK=nc2.diffK=diffK
     nc1.tau_sub=nc2.tau_sub=tau_sub
     nc1.crh_ad=nc2.crh_ad=float(crh_ad)
@@ -203,6 +208,11 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
     nc1.tau_cin=nc2.tau_cin=tau_cin
     nc1.diffCIN=nc2.diffCIN=diffCIN
     nc1.w_cnv=nc2.w_cnv=w_cnv
+    nc1.diurn=nc2.diurn=diurn_opt
+    nc1.diurn_p=nc2.diurn_p=diurn_p
+    nc1.diurn_a=nc2.diurn_a=diurn_a
+
+
     
     var_y.units = "km"
     var_x.units = "km"
