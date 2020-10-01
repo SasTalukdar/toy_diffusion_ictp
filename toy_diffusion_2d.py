@@ -46,25 +46,22 @@ def diffusion(fld,a0,a1,ndiff):
 
 
 # PUT default values here in argument list dictionary :-) 
-def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn_cases":["n"]}):
+def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn_cases":0}):
     """main routine for diff 2d model"""
 
+    print(args)
 
     global odir
     diffK=args["diffK"]
     tau_sub=args["tau_sub"]
     crh_ad=args["crh_ad"]
-
-    s=args["diurn_cases"]
-
+    diurn_opt=args["diurn_cases"]
     cin_radius=args["cin_radius"] # set to negative num to turn off coldpools
 
-    tab="diffK"+str(diffK)+"_tausub"+str(tau_sub)[0:6]+"_crhad"+str(crh_ad)+"_cinrad"+str(cin_radius)
-
+    tab="diffK"+str(diffK)+"_tausub"+str(tau_sub)[0:6]+"_crhad"+str(crh_ad)+"_cinrad"+str(cin_radius)+"_diurn"+str(diurn_opt)
 
     nfig_hr=24
     sfig_day=0
-
 
     # cin_radius=20 # radius of coldpools in km (now passed as argument)
     # domain size in m
@@ -75,7 +72,7 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
     dxkm=dx/1000.
     cin_radius/=dxkm
     
-    # diurnal cycle: "none", "weak", "strong"
+    # diurnal cycle: 0="none", 1="weak", 2="strong"
 
     # timestep
     dt=120.
@@ -226,188 +223,183 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
     # total number of events to distribute
     ncnv_tot=int(nt*nx*ny*w_sub/w_cnv)
 
-    # 3 options of diurnal cycle!
-    diurn_opts={}
-    diurn_opts["n"]=np.ones(nt)
-    diurn_opts["w"]=diurn_a*np.sin(np.pi*2*times*dt/86400.)+1.0
-    diurn_opts["s"]=(np.sin(np.pi*2*times*dt/86400.)+1.0)**diurn_p
-    diurn_opts["s"]=diurn_opts["s"]/np.mean(diurn_opts["s"]) # mean=1
-
     #
     # set up plots, timeseries
     #
 
-    for sdiurn in diurn_cases:
+    # 3 options of diurnal cycle!
+    if diurn_opt==0:
+        pdiurn=np.ones(nt)
+    if diurn_opt==1:
+        pdiurn=diurn_a*np.sin(np.pi*2*times*dt/86400.)+1.0
+    if diurn_opt==2:
+        pdiurn=(np.sin(np.pi*2*times*dt/86400.)+1.0)**diurn_p
+
+    pdiurn/=np.sum(pdiurn) # probs must add to 1
+
+    #
+    # number of convective events as function of time
+    # 
+    ncnv=np.bincount(np.random.choice(times,ncnv_tot,p=pdiurn),minlength=nt)
+    ncnv_overflow=0 # storage for overflow 
+    Nsmth=int(cnv_lifetime/dt) # need to smooth to lifetime of convection
+    if Nsmth>1:
+        ncnv=uniform_filter1d(ncnv,size=Nsmth)
+
+
+    # index for convection locations, 0 or 1 
+    cnv_idx=np.zeros([nx,ny],dtype=np.int)
+
+    # CIN array for coldpools
+    cin=np.zeros([3,nx,ny])
+
+    # crh, 3 time-level DF explicit scheme:
+    crh=np.random.normal(loc=crh_init,scale=0.01,size=[3,nx,ny])
+
+    # TEST top hat
+    mp=int(nx/2)
+    if ltest:
+        crh[:,mp-5:mp+5,mp-5:mp+5]=1.0
+
+    dummy_idx=np.arange(0,nx*ny,1)
+
+    ifig=0
+
+    # loop over time
+    for it in range(nt):
+        if (it*dt)%(24*3600)==0:
+            print ("day ",int(it*dt/86400.))
+        # explicit diffusion.
+        # use np.roll for efficient periodic boundary conditions
+        crh=diffusion(crh,alf0,alf1,ndiff)
 
         #
-        # set up envelope
+        # now apply implicit solution for subsidence
         #
-        pdiurn=diurn_opts[sdiurn]
-        pdiurn/=np.sum(pdiurn) # probs must add to 1
+        crh[1,:,:]/=dt_tau_sub
 
         #
-        # number of convective events as function of time
-        # 
-        ncnv=np.bincount(np.random.choice(times,ncnv_tot,p=pdiurn),minlength=nt)
-        ncnv_overflow=0 # storage for overflow 
-        Nsmth=int(cnv_lifetime/dt) # need to smooth to lifetime of convection
-        if Nsmth>1:
-            ncnv=uniform_filter1d(ncnv,size=Nsmth)
+        # now apply implicit solution for convection 
+        #
+
+        # First calculate residual N to generate this timestep
+        ncnv_curr=np.sum(cnv_idx)
+        ncnv_new=ncnv[it]+ncnv_overflow-ncnv_curr
+        #print("current",ncnv_curr,"ncnv ",ncnv[it]," overflow",ncnv_overflow," new ",ncnv_new)
+        ncnv_overflow=0 # overflow accounted for, so reset to zero
+        if (ncnv_new<0):
+            # we have too many convection events still alive, so we borrow from a future
+            # timestep.
+            ncnv_overflow=ncnv_new  # store overflow
+            ncnv_new=0 #  can't have neg new events 
+
+        #
+        # now need to decide where to put the new events, 
+        # bretherton updated CRH - with Craig adjustment
+        prob_crh=np.exp(crh_ad*crh[1,:,:])-1.0
+
+        # fudge to stop 2 conv in one place, coldpool will sort
+        prob_crh*=(1-cnv_idx)
+        prob_crh/=np.mean(prob_crh)
+
+        # INCLUDE cold pool here:
+        #prob_cin=np.where(cin[1,:,:]>cin_thresh,0.0,1.0)
+        #prob_cin=1.0-np.power(cin[1,:,:],0.15)
+        prob_cin=1.0-cin[1,:,:]
+
+        # product of 2:
+        prob=prob_crh
+        if cin_radius>0:
+            prob*=prob_cin # switch off coldpools here:
+        prob/=np.sum(prob) # normalized
+        prob1d=prob.flatten()
+
+        #
+        # sample the index using the prob function
+        # and PLACE NEW EVENTS:
+        #
+        coords=np.random.choice(dummy_idx,ncnv_new,p=prob1d,replace=False)
+        new_loc=np.unravel_index(coords,(nx,ny))
+        cnv_idx[new_loc]=1 # new events in slice zero
+        slice=crh[1,:,:]
+        if ncnv_new>0:
+            crh_in_new[it]=np.mean(slice[new_loc])
+        crh_driest[it]=np.min(slice)
 
 
-        # index for convection locations, 0 or 1 
-        cnv_idx=np.zeros([nx,ny],dtype=np.int)
+        # cnv_idx[mp,mp]=1 # TEST
 
-        # CIN array for coldpools
-        cin=np.zeros([3,nx,ny])
+        # update humidity
+        # collape conv array again # Q_Detrain where conv, zero otherwise
+        crh[1,:,:]=(crh[1,:,:]+cnv_idx*crh_det*dt_tau_cnv)/(1.0+cnv_idx*dt_tau_cnv)
 
-        # crh, 3 time-level DF explicit scheme:
-        crh=np.random.normal(loc=crh_init,scale=0.01,size=[3,nx,ny])
-
-        # TEST top hat
-        mp=int(nx/2)
-        if ltest:
-            crh[:,mp-5:mp+5,mp-5:mp+5]=1.0
-
-        dummy_idx=np.arange(0,nx*ny,1)
-
-        ifig=0
-
-        # loop over time
-        for it in range(nt):
-            if (it*dt)%(24*3600)==0:
-                print ("day ",int(it*dt/86400.))
-            # explicit diffusion.
-            # use np.roll for efficient periodic boundary conditions
-            crh=diffusion(crh,alf0,alf1,ndiff)
-
-            #
-            # now apply implicit solution for subsidence
-            #
-            crh[1,:,:]/=dt_tau_sub
-
-            #
-            # now apply implicit solution for convection 
-            #
-
-            # First calculate residual N to generate this timestep
+        #
+        # update coldpool here
+        #
+        if cin_radius>0:
+            cnv_coords=np.argwhere(cnv_idx)
             ncnv_curr=np.sum(cnv_idx)
-            ncnv_new=ncnv[it]+ncnv_overflow-ncnv_curr
-            #print("current",ncnv_curr,"ncnv ",ncnv[it]," overflow",ncnv_overflow," new ",ncnv_new)
-            ncnv_overflow=0 # overflow accounted for, so reset to zero
-            if (ncnv_new<0):
-                # we have too many convection events still alive, so we borrow from a future
-                # timestep.
-                ncnv_overflow=ncnv_new  # store overflow
-                ncnv_new=0 #  can't have neg new events 
+            if ncnv_curr>0:
+                #distlist=[]
+                #for ioff in [-nx,0,nx]:
+                #    for joff in [-ny,0,ny]:
+                #        j=cnv_coords.copy()
+                #        j[:,0]+=ioff
+                #        j[:,1]+=joff
+                #        distlist.append(np.amin(scidist.cdist(allidx,j,metric='euclidean'),1))
+                #cnvdst=np.amin(np.stack(distlist),0).reshape(nx,ny)
+                #cnvdst*=dxkm
+                for xoff in [0,nx,-nx]:
+                    for yoff in [0,-ny,ny]:
+                        if xoff==0 and yoff==0:
+                            j9=cnv_coords.copy()
+                        else:
+                            jo=cnv_coords.copy()
+                            jo[:,0]+=xoff
+                            jo[:,1]+=yoff
+                            j9=np.vstack((j9,jo))
+                tree=spatial.cKDTree(j9)
+                cnvdst,minidx=tree.query(allidx)
+                cnvdst=cnvdst.reshape([nx,ny])
 
-            #
-            # now need to decide where to put the new events, 
-            # bretherton updated CRH - with Craig adjustment
-            prob_crh=np.exp(crh_ad*crh[1,:,:])-1.0
-            
-            # fudge to stop 2 conv in one place, coldpool will sort
-            prob_crh*=(1-cnv_idx)
-            prob_crh/=np.mean(prob_crh)
+            else:
+                cnvdst=np.ones([nx,ny])*1.e6
 
-            # INCLUDE cold pool here:
-            #prob_cin=np.where(cin[1,:,:]>cin_thresh,0.0,1.0)
-            #prob_cin=1.0-np.power(cin[1,:,:],0.15)
-            prob_cin=1.0-cin[1,:,:]
-            
-            # product of 2:
-            prob=prob_crh
+            maskcin=np.where(cnvdst<cin_radius,1,0)
+
+            cin[1,:,:]=cin[1,:,:]+maskcin # all conv points sets to 1
+            cin=np.clip(cin,0,1)
+
+        # cin[1,:,:]*=dt_tau_cin_fac # implicit
+            cin[1,:,:]-=dt_tau_cin # explicit 
+            cin=diffusion(cin,alfcin0,alfcin1,ndiff)            
+            cin=np.clip(cin,0,1)
+
+        #
+        # random death of cells.
+        # 
+        mask=np.where(np.random.uniform(size=(nx,ny))<=cnv_death,0,1)
+        cnv_idx*=mask
+
+        #
+        cnv_loc=np.argwhere(cnv_idx==1)    
+
+        # netcdf output for timeseries:
+        var_time2[it]=it*dt
+        crh_mean[it]=np.mean(crh[1,:,:])
+        crh_std[it]=np.std(crh[1,:,:])
+
+        day=it*dt/86400
+        if (it*dt)%(nfig_hr*3600)==0:
+            var_time1[nccnt]=it*dt
+            var_CRH[nccnt,:,:]=crh[1,:,:]     
             if cin_radius>0:
-                prob*=prob_cin # switch off coldpools here:
-            prob/=np.sum(prob) # normalized
-            prob1d=prob.flatten()
-
-            #
-            # sample the index using the prob function
-            # and PLACE NEW EVENTS:
-            #
-            coords=np.random.choice(dummy_idx,ncnv_new,p=prob1d,replace=False)
-            new_loc=np.unravel_index(coords,(nx,ny))
-            cnv_idx[new_loc]=1 # new events in slice zero
-            slice=crh[1,:,:]
-            if ncnv_new>0:
-                crh_in_new[it]=np.mean(slice[new_loc])
-            crh_driest[it]=np.min(slice)
+                var_CIN[nccnt,:,:]=cin[1,:,:]     
 
 
-            # cnv_idx[mp,mp]=1 # TEST
-
-            # update humidity
-            # collape conv array again # Q_Detrain where conv, zero otherwise
-            crh[1,:,:]=(crh[1,:,:]+cnv_idx*crh_det*dt_tau_cnv)/(1.0+cnv_idx*dt_tau_cnv)
-
-            #
-            # update coldpool here
-            #
-            if cin_radius>0:
-                cnv_coords=np.argwhere(cnv_idx)
-                ncnv_curr=np.sum(cnv_idx)
-                if ncnv_curr>0:
-                    #distlist=[]
-                    #for ioff in [-nx,0,nx]:
-                    #    for joff in [-ny,0,ny]:
-                    #        j=cnv_coords.copy()
-                    #        j[:,0]+=ioff
-                    #        j[:,1]+=joff
-                    #        distlist.append(np.amin(scidist.cdist(allidx,j,metric='euclidean'),1))
-                    #cnvdst=np.amin(np.stack(distlist),0).reshape(nx,ny)
-                    #cnvdst*=dxkm
-                    for xoff in [0,nx,-nx]:
-                        for yoff in [0,-ny,ny]:
-                            if xoff==0 and yoff==0:
-                                j9=cnv_coords.copy()
-                            else:
-                                jo=cnv_coords.copy()
-                                jo[:,0]+=xoff
-                                jo[:,1]+=yoff
-                                j9=np.vstack((j9,jo))
-                    tree=spatial.cKDTree(j9)
-                    cnvdst,minidx=tree.query(allidx)
-                    cnvdst=cnvdst.reshape([nx,ny])
-                    
-                else:
-                    cnvdst=np.ones([nx,ny])*1.e6
-
-                maskcin=np.where(cnvdst<cin_radius,1,0)
-                
-                cin[1,:,:]=cin[1,:,:]+maskcin # all conv points sets to 1
-                cin=np.clip(cin,0,1)
-
-            # cin[1,:,:]*=dt_tau_cin_fac # implicit
-                cin[1,:,:]-=dt_tau_cin # explicit 
-                cin=diffusion(cin,alfcin0,alfcin1,ndiff)            
-                cin=np.clip(cin,0,1)
-
-            #
-            # random death of cells.
-            # 
-            mask=np.where(np.random.uniform(size=(nx,ny))<=cnv_death,0,1)
-            cnv_idx*=mask
-
-            #
-            cnv_loc=np.argwhere(cnv_idx==1)    
-
-            # netcdf output for timeseries:
-            var_time2[it]=it*dt
-            crh_mean[it]=np.mean(crh[1,:,:])
-            crh_std[it]=np.std(crh[1,:,:])
-
-            day=it*dt/86400
-            if (it*dt)%(nfig_hr*3600)==0:
-                var_time1[nccnt]=it*dt
-                var_CRH[nccnt,:,:]=crh[1,:,:]     
-                if cin_radius>0:
-                    var_CIN[nccnt,:,:]=cin[1,:,:]     
+            nccnt+=1
 
 
-                nccnt+=1
-              
-                
     nc1.close()
     nc2.close()
 
@@ -418,9 +410,9 @@ if __name__ == "__main__":
     crh_ad=16.12
     tau_sub=20. # days!
     cin_radius=-99. # switched off by default
-    diurn_cases="n"
+    diurn_cases=0
     
-    arglist=["help","diffK=","crh_ad=","tau_sub=","odir=","cin_radius=","nfig_hr="]
+    arglist=["help","diffK=","crh_ad=","tau_sub=","odir=","cin_radius=","nfig_hr=","diurn="]
     try:
         opts, args = getopt.getopt(sys.argv[1:],"h",arglist)
     except getopt.GetoptError:
@@ -442,11 +434,10 @@ if __name__ == "__main__":
             nfig_hr = int(arg)
         elif opt in ("--odir"):
             odir = arg
-
-    print ("diurn_cases",diurn_cases)
+        elif opt in ("--diurn"):
+            diurn_cases = arg
 
     # pass args as a dictionary to ensure one arg only, two opts are missing, add later
-    args={"diffK":diffK,"tau_sub":tau_sub,"crh_ad":crh_ad,"cin_radius":cin_radius,
-          "diurn_cases":diurn_cases}    
+    args={"diffK":diffK,"tau_sub":tau_sub,"crh_ad":crh_ad,"cin_radius":cin_radius,  "diurn_cases":diurn_cases}    
 
     main(args)
