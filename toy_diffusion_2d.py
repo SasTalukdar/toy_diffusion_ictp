@@ -221,9 +221,8 @@ def main():
     nc1.diurn=nc2.diurn=diurn_opt
     nc1.diurn_p=nc2.diurn_p=diurn_p
     nc1.diurn_a=nc2.diurn_a=diurn_a
+    nc1.dt=nc2.dt=dt
 
-
-    
     var_y.units = "km"
     var_x.units = "km"
     var_time1.units=var_time2.units="seconds since 2000-01-01 00:00:00.0"
