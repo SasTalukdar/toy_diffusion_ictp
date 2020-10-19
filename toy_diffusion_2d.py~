@@ -59,7 +59,6 @@ def main(pars):
     diurn_opt=pars["diurn_cases"]
     cin_radius=pars["cin_radius"] # set to negative num to turn off coldpools
     dxy=pars["dxy"]
-    dt=pars["dt"]
     domain_x=domain_y=pars["domain_xy"]
 
     tab="diffK"+str(diffK)+"_tausub"+str(tau_sub)[0:6]+"_crhad"+str(crh_ad)+"_cinrad"+str(cin_radius)+"_diurn"+str(diurn_opt)
@@ -77,6 +76,7 @@ def main(pars):
     # diurnal cycle: 0="none", 1="weak", 2="strong"
 
     # timestep
+    dt=30.
     dtdiff=dt
     ndiff=int(dt/dtdiff)
 
@@ -417,6 +417,5 @@ if __name__ == "__main__":
     pars["nday"]=5 # short for testing
     pars["domain_xy"]=300.e3
     pars["dxy"]=2000.
-    pars["dt"]=120
     pars=getargs.getargs(pars)
     main(pars)
