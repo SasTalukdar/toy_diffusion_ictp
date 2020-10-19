@@ -62,11 +62,10 @@ def main():
     pars["cin_radius"]=-99. # switched off by default
     pars["diurn_cases"]=0
     pars["nday"]=5 # short for testing
-    pars["domain_xy"]=500.e3
+    pars["domain_xy"]=300.e3
     pars["dxy"]=2000.
     pars=getargs.getargs(pars)
 
-    global odir
     diffK=pars["diffK"]
     tau_sub=pars["tau_sub"]
     crh_ad=pars["crh_ad"]
@@ -83,13 +82,14 @@ def main():
     # cin_radius=20 # radius of coldpools in km (now passed as argument)
     # domain size in m
     
+    dx=dy=dxy
     dxkm=dx/1000.
     cin_radius/=dxkm
     
     # diurnal cycle: 0="none", 1="weak", 2="strong"
 
     # timestep
-    dt=120.
+    dt=30.
     dtdiff=dt
     ndiff=int(dt/dtdiff)
 
@@ -127,8 +127,6 @@ def main():
     # diurn_o=0.35
 
     
-    odir="../plots/"
-
     ltest=False
     
     #-------------------
@@ -145,24 +143,19 @@ def main():
     dt_tau_cin_fac=1.0+dt/tau_cin
     dt_tau_cin=dt/tau_cin
 
-    try:
-        os.mkdir(odir)
-    except:
-        pass
-
     # will assume diffusion same in both directions:
     alfa=diffK*dtdiff/(dxy*dxy)
     alf0=(1.0-4.0*alfa)/(1.0+4.0*alfa) # level zero factor 
     alf1=2.*alfa/(1.0+4.0*alfa) # level 1 factor
     # print(" first alf",diffK,alfa,alf0,alf1)
-    alfacin=diffCIN*dtdiff/(dx*dx)
+    alfacin=diffCIN*dtdiff/(dxy*dxy)
     alfcin0=(1.0-4.0*alfacin)/(1.0+4.0*alfacin) # level zero factor 
     alfcin1=2.*alfacin/(1.0+4.0*alfacin) # level 1 factor
 
     #print(" cin alf",alfcin0,alfcin1)
 
     cnv_death=min(dt/cnv_lifetime,1.0)
-    nx=int(domain_x/dx)+1 ; ny=int(domain_y/dxy)+1
+    nx=int(domain_x/dxy)+1 ; ny=int(domain_y/dxy)+1
     x1d=np.linspace(0,domain_x,nx)
     y1d=np.linspace(0,domain_y,nx)
     x,y=np.meshgrid(x1d/1000,y1d/1000) # grid in km
@@ -235,7 +228,7 @@ def main():
     # file 2 is the timeseries file
 
     # number of timesteps:
-    nt=int(pars[nday]*86400/dt)
+    nt=int(pars["nday"]*86400/dt)
     times=np.arange(0,nt,1)
     days=times*dt/86400.
 
@@ -337,6 +330,8 @@ def main():
         # sample the index using the prob function
         # and PLACE NEW EVENTS:
         #
+        print("test",np.max(prob1d))
+
         coords=np.random.choice(dummy_idx,ncnv_new,p=prob1d,replace=False)
         new_loc=np.unravel_index(coords,(nx,ny))
         cnv_idx[new_loc]=1 # new events in slice zero
