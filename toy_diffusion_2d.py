@@ -317,7 +317,6 @@ def main(pars):
         # sample the index using the prob function
         # and PLACE NEW EVENTS:
         #
-        print("test",np.max(prob1d))
 
         coords=np.random.choice(dummy_idx,ncnv_new,p=prob1d,replace=False)
         new_loc=np.unravel_index(coords,(nx,ny))
