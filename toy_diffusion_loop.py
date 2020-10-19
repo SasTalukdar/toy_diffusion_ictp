@@ -55,6 +55,8 @@ def main(argv):
     arglist=[{"diffK":d,"tau_sub":t,"crh_ad":c,"nfig_hr":nfig_hr,"odir":odir,"cin_radius":cr,"diurn_cases":dc} for d in diffK for t in tau_sub for c in crh_ad for cr in cin_radius for dc in diurn_cases ]    
     #
 
+    print("check ",arglist)
+
     # now farm out the jobs over the triple loop
     # only use the number of processors needed, or max-1
     if (lparallel): # parallel mode

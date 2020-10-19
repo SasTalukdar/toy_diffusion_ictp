@@ -48,23 +48,10 @@ def diffusion(fld,a0,a1,ndiff):
 
 
 # PUT default values here in argument list dictionary :-) 
-def main():
+def main(pars):
     """main routine for diff 2d model"""
 
-    # default values: crhad from bretherton et al update 2017
-    global pars
-    pars={}
-
-    # default values that can be overwritten:
-    pars["diffK"]=37500. # m2/s
-    pars["crh_ad"]=16.12
-    pars["tau_sub"]=20. # days!
-    pars["cin_radius"]=-99. # switched off by default
-    pars["diurn_cases"]=0
-    pars["nday"]=5 # short for testing
-    pars["domain_xy"]=300.e3
-    pars["dxy"]=2000.
-    pars=getargs.getargs(pars)
+    # split options from dictionary
 
     diffK=pars["diffK"]
     tau_sub=pars["tau_sub"]
@@ -418,4 +405,17 @@ def main():
 
 if __name__ == "__main__":
 
-    main()
+    # default values: crhad from bretherton et al update 2017
+    pars={}
+
+    # default values that can be overwritten:
+    pars["diffK"]=37500. # m2/s
+    pars["crh_ad"]=16.12
+    pars["tau_sub"]=20. # days!
+    pars["cin_radius"]=-99. # switched off by default
+    pars["diurn_cases"]=0
+    pars["nday"]=5 # short for testing
+    pars["domain_xy"]=300.e3
+    pars["dxy"]=2000.
+    pars=getargs.getargs(pars)
+    main(pars)
