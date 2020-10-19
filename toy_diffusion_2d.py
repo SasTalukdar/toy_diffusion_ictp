@@ -1,11 +1,13 @@
 import matplotlib.pyplot as plt
 from scipy.ndimage.filters import uniform_filter1d
 from scipy import spatial
-import getopt, sys
+import sys
+from datetime import datetime
 import os, time
 import numpy as np
 from netCDF4 import Dataset
 import ast 
+import getargs
 
 #
 # this is a new version of the diffusion code in 2D
@@ -46,47 +48,53 @@ def diffusion(fld,a0,a1,ndiff):
 
 
 # PUT default values here in argument list dictionary :-) 
-def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn_cases":0}):
+def main():
     """main routine for diff 2d model"""
 
-    print(args)
+    # default values: crhad from bretherton et al update 2017
+    global pars
+    pars={}
 
-    global odir
-    diffK=args["diffK"]
-    tau_sub=args["tau_sub"]
-    crh_ad=args["crh_ad"]
-    diurn_opt=args["diurn_cases"]
+    # default values that can be overwritten:
+    pars["diffK"]=37500. # m2/s
+    pars["crh_ad"]=16.12
+    pars["tau_sub"]=20. # days!
+    pars["cin_radius"]=-99. # switched off by default
+    pars["diurn_cases"]=0
+    pars["nday"]=5 # short for testing
+    pars["domain_xy"]=300.e3
+    pars["dxy"]=2000.
+    pars=getargs.getargs(pars)
 
-    cin_radius=args["cin_radius"] # set to negative num to turn off coldpools
+    diffK=pars["diffK"]
+    tau_sub=pars["tau_sub"]
+    crh_ad=pars["crh_ad"]
+    diurn_opt=pars["diurn_cases"]
+    cin_radius=pars["cin_radius"] # set to negative num to turn off coldpools
+    dxy=pars["dxy"]
+    domain_x=domain_y=pars["domain_xy"]
 
-    tab="diffK"+str(diffK)+"_tausub"+str(tau_sub)[0:6]+"_crhad"+str(crh_ad)+"_cinrad"+str(cin_radius)
-
+    tab="diffK"+str(diffK)+"_tausub"+str(tau_sub)[0:6]+"_crhad"+str(crh_ad)+"_cinrad"+str(cin_radius)+"_diurn"+str(diurn_opt)
 
     nfig_hr=24
     sfig_day=0
 
-
     # cin_radius=20 # radius of coldpools in km (now passed as argument)
     # domain size in m
     
-    global domain_x,domain_y, dx, dy
-    domain_x=domain_y=500.e3
-    dx=dy=2000.
+    dx=dy=dxy
     dxkm=dx/1000.
     cin_radius/=dxkm
     
     # diurnal cycle: 0="none", 1="weak", 2="strong"
 
     # timestep
-    dt=120.
+    dt=30.
     dtdiff=dt
     ndiff=int(dt/dtdiff)
 
     # initial column RH
     crh_init=0.8
-
-    # time integration days
-    nday=5
 
     # convective detrained value
     # this is 1+IWP/PW, IWP max ~ 3kg/m**2 for 60kg/m**2
@@ -116,11 +124,9 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
     # fake diurnal cycle
     diurn_a=0.6
     diurn_p=2
-    diurn_o=0.35
+    # diurn_o=0.35
 
     
-    odir="../plots/"
-
     ltest=False
     
     #-------------------
@@ -137,26 +143,21 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
     dt_tau_cin_fac=1.0+dt/tau_cin
     dt_tau_cin=dt/tau_cin
 
-    try:
-        os.mkdir(odir)
-    except:
-        pass
-
     # will assume diffusion same in both directions:
-    alfa=diffK*dtdiff/(dx*dx)
+    alfa=diffK*dtdiff/(dxy*dxy)
     alf0=(1.0-4.0*alfa)/(1.0+4.0*alfa) # level zero factor 
     alf1=2.*alfa/(1.0+4.0*alfa) # level 1 factor
     # print(" first alf",diffK,alfa,alf0,alf1)
-    alfacin=diffCIN*dtdiff/(dx*dx)
+    alfacin=diffCIN*dtdiff/(dxy*dxy)
     alfcin0=(1.0-4.0*alfacin)/(1.0+4.0*alfacin) # level zero factor 
     alfcin1=2.*alfacin/(1.0+4.0*alfacin) # level 1 factor
 
     #print(" cin alf",alfcin0,alfcin1)
 
     cnv_death=min(dt/cnv_lifetime,1.0)
-    nx=int(domain_x/dx)+1 ; ny=int(domain_y/dy)+1
+    nx=int(domain_x/dxy)+1 ; ny=int(domain_y/dxy)+1
     x1d=np.linspace(0,domain_x,nx)
-    y1d=np.linspace(0,domain_x,nx)
+    y1d=np.linspace(0,domain_y,nx)
     x,y=np.meshgrid(x1d/1000,y1d/1000) # grid in km
     allidx=np.argwhere(np.zeros([nx,ny])<1) # all true
 
@@ -192,9 +193,13 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
     crh_in_new = nc2.createVariable("CRH_new_conv","f8",("time",))
     crh_driest = nc2.createVariable("CRH_driest","f8",("time",))
 
-    nc1.description="2d snapshots"
-    nc1.history="Created today "
-    nc1.source="Adrian Tompkins (tompkins@ictp.it)"
+    # Global attributes here for both files:
+    nc1.description="2D diffusion model, 2d slice snapshots"
+    nc2.description="2D diffusion model, Timeseries statistics"
+    nc1.history=nc2.history="Created "+datetime.today().strftime('%Y-%m-%d')
+    nc1.source=nc2.source="Adrian Tompkins (tompkins@ictp.it)"
+
+    # parameter settings:
     nc1.diffK=nc2.diffK=diffK
     nc1.tau_sub=nc2.tau_sub=tau_sub
     nc1.crh_ad=nc2.crh_ad=float(crh_ad)
@@ -206,7 +211,11 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
     nc1.tau_cin=nc2.tau_cin=tau_cin
     nc1.diffCIN=nc2.diffCIN=diffCIN
     nc1.w_cnv=nc2.w_cnv=w_cnv
-    
+    nc1.diurn=nc2.diurn=diurn_opt
+    nc1.diurn_p=nc2.diurn_p=diurn_p
+    nc1.diurn_a=nc2.diurn_a=diurn_a
+    nc1.dt=nc2.dt=dt
+
     var_y.units = "km"
     var_x.units = "km"
     var_time1.units=var_time2.units="seconds since 2000-01-01 00:00:00.0"
@@ -219,7 +228,7 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
     # file 2 is the timeseries file
 
     # number of timesteps:
-    nt=int(nday*86400/dt)
+    nt=int(pars["nday"]*86400/dt)
     times=np.arange(0,nt,1)
     days=times*dt/86400.
 
@@ -321,6 +330,8 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
         # sample the index using the prob function
         # and PLACE NEW EVENTS:
         #
+        print("test",np.max(prob1d))
+
         coords=np.random.choice(dummy_idx,ncnv_new,p=prob1d,replace=False)
         new_loc=np.unravel_index(coords,(nx,ny))
         cnv_idx[new_loc]=1 # new events in slice zero
@@ -399,7 +410,6 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
             if cin_radius>0:
                 var_CIN[nccnt,:,:]=cin[1,:,:]     
 
-
             nccnt+=1
 
 
@@ -408,39 +418,4 @@ def main(args={"diffK":37500,"tau_sub":20,"crh_ad":16.12,"cin_radius":-99,"diurn
 
 if __name__ == "__main__":
 
-    # default values: crhad from bretherton et al update 2017
-    diffK=37500. # m2/s
-    crh_ad=16.12
-    tau_sub=20. # days!
-    cin_radius=-99. # switched off by default
-    diurn_cases=0
-    
-    arglist=["help","diffK=","crh_ad=","tau_sub=","odir=","cin_radius=","nfig_hr=","diurn="]
-    try:
-        opts, args = getopt.getopt(sys.argv[1:],"h",arglist)
-    except getopt.GetoptError:
-        print ("args are:",arglist)  
-        sys.exit(2)
-    for opt, arg in opts:
-        if opt in ("-h","--help"):
-            print ("check out this list: ",arglist)
-            sys.exit()
-        elif opt in ("--diffK"):
-            diffK = float(arg)
-        elif opt in ("--crh_ad"):
-            crh_ad = float(arg)
-        elif opt in ("--cin_radius"):
-            cin_radius = float(arg)
-        elif opt in ("--tau_sub"):
-            tau_sub = float(arg)
-        elif opt in ("--nfig_hr"):
-            nfig_hr = int(arg)
-        elif opt in ("--odir"):
-            odir = arg
-        elif opt in ("--diurn"):
-            diurn_cases = arg
-
-    # pass args as a dictionary to ensure one arg only, two opts are missing, add later
-    args={"diffK":diffK,"tau_sub":tau_sub,"crh_ad":crh_ad,"cin_radius":cin_radius,  "diurn_cases":diurn_cases}    
-
-    main(args)
+    main()
