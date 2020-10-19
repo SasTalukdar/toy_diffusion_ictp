@@ -42,8 +42,12 @@ def main(argv):
     tau_sub=[i for i in range(4,44,2)]
     crh_ad=[10,12,14,18,20,22]+[14.72,16.12]
 
+
+    # short test run for long queue (max 6 jobs)
+    #crh_ad=[10,12,14,16,18,20]
+
     # test single job only
-    # crh_ad=[14.72]
+    crh_ad=[14.72]
 
     # will make ONE job for each crh_ad and these loop over the other two variables.
     for icrh,crh in enumerate(crh_ad):
@@ -64,7 +68,7 @@ def main(argv):
             fh.writelines("export NETCDF_LIB=$(nf-config --flibs)\n")
             fh.writelines("export NETCDF_INCLUDE=$(nf-config --fflags)\n")
             fh.writelines("export FC=`nf-config --fc`\n")
-            fh.writelines('python3 ~/diffusion/run/toy_diffusion_loop.py --diffK="{}" --tau_sub="{}" --crh_ad="{}" \n'.format(diffK,tau_sub,[crh]))
+            fh.writelines('python3 ~/diffusion/toy_diffusion/toy_diffusion_loop.py --diffK="{}" --tau_sub="{}" --crh_ad="{}" \n'.format(diffK,tau_sub,[crh]))
 
         #jobid=os.system("sbatch "+jobfile)
         command=["sbatch","--parsable",jobfile]
