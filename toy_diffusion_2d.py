@@ -72,7 +72,7 @@ def main(pars):
     
     dx=dy=dxy
     dxkm=dx/1000.
-    cin_radius/=dxkm
+    #cin_radius/=dxkm # instead of converting to points, scale up the cnvdst
     
     # diurnal cycle: 0="none", 1="weak", 2="strong"
 
@@ -164,9 +164,14 @@ def main(pars):
     var_time1 = nc1.createVariable("time","f8",("time",))
     var_x = nc1.createVariable("X","f4",("x",))
     var_y = nc1.createVariable("Y","f4",("y",))
+
     # two dimensions unlimited
     var_CRH=nc1.createVariable("CRH","f4",("time","y","x",))
     var_CRH.units = "fraction"
+    var_CRH.long_name = "Column total water relative humidity"
+    var_D2C=nc1.createVariable("D2C","f4",("time","y","x",))
+    var_D2C.units = "km"
+    var_D2C.long_name = "Distance to nearest updraft"
 
     if cin_radius>0:
         var_CIN=nc1.createVariable("CIN","f4",("time","y","x",))
@@ -179,7 +184,25 @@ def main(pars):
     crh_std = nc2.createVariable("CRH_std","f8",("time",))
     crh_in_new = nc2.createVariable("CRH_new_conv","f8",("time",))
     crh_driest = nc2.createVariable("CRH_driest","f8",("time",))
+    d2c_95=nc2.createVariable("D2C95","f8",("time",))
+    d2c_max=nc2.createVariable("D2C_max","f8",("time",))
+    d2c_mean=nc2.createVariable("D2C_mean","f8",("time",))
+    d2c_median=nc2.createVariable("D2C_median","f8",("time",))
 
+    d2c_95.long_name="distance to convection 95th percentile"
+    d2c_95.units="km"
+    d2c_max.long_name="distance to convection - maximum"
+    d2c_max.units="km"
+    d2c_mean.long_name="distance to convection - mean"
+    d2c_mean.units="km"
+    d2c_median.long_name="distance to convection - median"
+    d2c_median.units="km"
+    
+    crh_mean.long_name = "CRH domain mean"
+    crh_std.long_name = "CRH domain standard deviation"
+    crh_in_new.long_name = "CRH value in new convective locations"
+
+    
     # Global attributes here for both files:
     nc1.description="2D diffusion model, 2d slice snapshots"
     nc2.description="2D diffusion model, Timeseries statistics"
@@ -334,43 +357,36 @@ def main(pars):
         crh[1,:,:]=(crh[1,:,:]+cnv_idx*crh_det*dt_tau_cnv)/(1.0+cnv_idx*dt_tau_cnv)
 
         #
+        # calculate distance to convection 
+        #
+        cnv_coords=np.argwhere(cnv_idx) #need to update to include new events
+        ncnv_curr=np.sum(cnv_idx)
+        if ncnv_curr>0:
+            #cnvdst*=dxkm
+            for xoff in [0,nx,-nx]:
+                for yoff in [0,-ny,ny]:
+                    if xoff==0 and yoff==0:
+                        j9=cnv_coords.copy()
+                    else:
+                        jo=cnv_coords.copy()
+                        jo[:,0]+=xoff
+                        jo[:,1]+=yoff
+                        j9=np.vstack((j9,jo))
+            tree=spatial.cKDTree(j9)
+            cnvdst,minidx=tree.query(allidx)
+            cnvdst=cnvdst.reshape([nx,ny])
+            cnvdst*=dxkm
+        else:
+            cnvdst=np.ones([nx,ny])*1.e6
+
+        #
         # update coldpool here
         #
         if cin_radius>0:
-            cnv_coords=np.argwhere(cnv_idx)
-            ncnv_curr=np.sum(cnv_idx)
-            if ncnv_curr>0:
-                #distlist=[]
-                #for ioff in [-nx,0,nx]:
-                #    for joff in [-ny,0,ny]:
-                #        j=cnv_coords.copy()
-                #        j[:,0]+=ioff
-                #        j[:,1]+=joff
-                #        distlist.append(np.amin(scidist.cdist(allidx,j,metric='euclidean'),1))
-                #cnvdst=np.amin(np.stack(distlist),0).reshape(nx,ny)
-                #cnvdst*=dxkm
-                for xoff in [0,nx,-nx]:
-                    for yoff in [0,-ny,ny]:
-                        if xoff==0 and yoff==0:
-                            j9=cnv_coords.copy()
-                        else:
-                            jo=cnv_coords.copy()
-                            jo[:,0]+=xoff
-                            jo[:,1]+=yoff
-                            j9=np.vstack((j9,jo))
-                tree=spatial.cKDTree(j9)
-                cnvdst,minidx=tree.query(allidx)
-                cnvdst=cnvdst.reshape([nx,ny])
-
-            else:
-                cnvdst=np.ones([nx,ny])*1.e6
-
             maskcin=np.where(cnvdst<cin_radius,1,0)
-
             cin[1,:,:]=cin[1,:,:]+maskcin # all conv points sets to 1
             cin=np.clip(cin,0,1)
-
-        # cin[1,:,:]*=dt_tau_cin_fac # implicit
+            # cin[1,:,:]*=dt_tau_cin_fac # implicit
             cin[1,:,:]-=dt_tau_cin # explicit 
             cin=diffusion(cin,alfcin0,alfcin1,ndiff)            
             cin=np.clip(cin,0,1)
@@ -384,15 +400,23 @@ def main(pars):
         #
         cnv_loc=np.argwhere(cnv_idx==1)    
 
+        # 
         # netcdf output for timeseries:
+        #
         var_time2[it]=it*dt
         crh_mean[it]=np.mean(crh[1,:,:])
         crh_std[it]=np.std(crh[1,:,:])
+        d2c_mean[it]=np.mean(cnvdst)
+        d2c_median[it]=np.median(cnvdst)
+        d2c_max[it]=np.max(cnvdst)
+        d2c_95[it]=np.percentile(cnvdst,95)
 
+        
         day=it*dt/86400
         if (it*dt)%(nfig_hr*3600)==0:
             var_time1[nccnt]=it*dt
             var_CRH[nccnt,:,:]=crh[1,:,:]     
+            var_D2C[nccnt,:,:]=cnvdst     
             if cin_radius>0:
                 var_CIN[nccnt,:,:]=cin[1,:,:]     
 
