@@ -184,7 +184,7 @@ def main(pars):
 
     #
     # All users defined values in par also saved as global attributes
-    for key,val in pars:
+    for key,val in pars.items():
         setattr(nc1,key,pars[key])
         setattr(nc2,key,pars[key])
 
