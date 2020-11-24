@@ -157,6 +157,7 @@ def main(pars):
     crh_std = nc2.createVariable("CRH_std","f8",("time",))
     crh_in_new = nc2.createVariable("CRH_new_conv","f8",("time",))
     crh_driest = nc2.createVariable("CRH_driest","f8",("time",))
+    nc2_ncnv = nc2.createVariable("nconv","i8",("time",))
     d2c_95=nc2.createVariable("D2C95","f8",("time",))
     d2c_max=nc2.createVariable("D2C_max","f8",("time",))
     d2c_mean=nc2.createVariable("D2C_mean","f8",("time",))
@@ -174,6 +175,8 @@ def main(pars):
     crh_mean.long_name = "CRH domain mean"
     crh_std.long_name = "CRH domain standard deviation"
     crh_in_new.long_name = "CRH value in new convective locations"
+    nc2_ncnv.long_name="Total number of convective events"
+    nc2_ncnv.units="total number"
 
     #
     # Global attributes here for both files:
@@ -189,7 +192,7 @@ def main(pars):
     print ("- RUN PARS -")
     print ("------------")
     for key,val in pars.items():
-        print (key,val)
+        print (key,"=",val)
         setattr(nc1,key,pars[key])
         setattr(nc2,key,pars[key])
     print ("-----------")
@@ -251,6 +254,8 @@ def main(pars):
     if Nsmth>1:
         ncnv=uniform_filter1d(ncnv,size=Nsmth)
 
+    # save to netcdf
+        
 
     # index for convection locations, 0 or 1 
     cnv_idx=np.zeros([nx,ny],dtype=np.int)
@@ -344,6 +349,7 @@ def main(pars):
         #
         cnv_coords=np.argwhere(cnv_idx) #need to update to include new events
         ncnv_curr=np.sum(cnv_idx)
+        nc2_ncnv[it]=ncnv_curr
         if ncnv_curr>0:
             #cnvdst*=dxkm
             for xoff in [0,nx,-nx]:
