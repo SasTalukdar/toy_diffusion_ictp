@@ -120,7 +120,8 @@ def main(pars):
     x,y=np.meshgrid(x1d/1000,y1d/1000) # grid in km
     allidx=np.argwhere(np.zeros([nx,ny])<1) # all true
 
-    print ("opening output"),tab
+    print ("toy_diffusion_2d model of atmosphere")
+    print ("opening output maps/stats:",tab)
 
     # open the netcdf files:
     nc1 = Dataset("td_maps_"+tab+".nc", "w", format="NETCDF4")
@@ -184,9 +185,14 @@ def main(pars):
 
     #
     # All users defined values in par also saved as global attributes
+    print ("------------")
+    print ("- RUN PARS -")
+    print ("------------")
     for key,val in pars.items():
+        print (key,val)
         setattr(nc1,key,pars[key])
         setattr(nc2,key,pars[key])
+    print ("-----------")
 
     # parameter settings:
 #    nc1.diffK=nc2.diffK=pars["diffK"]
@@ -212,7 +218,6 @@ def main(pars):
     var_y[:]=y1d
     var_x[:]=x1d
 
-    print ("opening file 2")    
     # file 2 is the timeseries file
 
     # number of timesteps:
