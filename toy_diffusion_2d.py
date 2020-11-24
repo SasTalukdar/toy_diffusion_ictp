@@ -231,8 +231,8 @@ def main(pars):
     var_time1.units=var_time2.units="seconds since 2000-01-01 00:00:00.0"
     var_time1.calendar=var_time2.calendar="gregorian"
 
-    var_y[:]=y1d
-    var_x[:]=x1d
+    var_y[:]=y1d*dxkm
+    var_x[:]=x1d*dxkm
 
     print ("opening file 2")    
     # file 2 is the timeseries file
@@ -433,13 +433,13 @@ if __name__ == "__main__":
 
     # default values that can be overwritten:
     pars["diffK"]=37500. # m2/s
-    pars["crh_ad"]=16.12
+    pars["crh_ad"]=14.72
     pars["tau_sub"]=20. # days!
     pars["cin_radius"]=-99. # switched off by default
     pars["diurn_cases"]=0
     pars["nday"]=5 # short for testing
-    pars["domain_xy"]=300.e3
+    pars["domain_xy"]=500.e3
     pars["dxy"]=2000.
-    pars["dt"]=120
+    pars["dt"]=60.
     pars=getargs.getargs(pars)
     main(pars)
