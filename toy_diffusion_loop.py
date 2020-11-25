@@ -16,20 +16,11 @@ def main(argv):
     f=open("diffusion_results.txt","w")
     f.close()
 
-    # defaults here as LISTS!
-    diffK=[37500]
-    crh_ad=[16.12]
-    tau_sub=[20]
-    cin_radius=[-99] # turned off by default
-    diurn_cases=[0] # default value for all runs
+    # base defaults in toy_diffusion model now.
+    pars=toy_diffusion_2d.default()
 
-    dxy=2000.
-    domain_xy=300.e3
-    nday=60.
-    dt=30.
-
-    # other defaults
-    nfig_hr=6
+    # need to refer to these dictionaries in the following, and looop. 
+    
     odir="./"
 
     arglist=["help","diffK=","crh_ad=","tau_sub=","odir=","nfig_hr=","cin_radius","dt=","nday="]

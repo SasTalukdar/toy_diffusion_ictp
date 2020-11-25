@@ -33,6 +33,51 @@ import getargs
 
 # surface nfig out frequency (slows it down a lot!)
 
+def defaults():
+    # NOTE: anything in pars can be controlled from command line
+    # and is saved in both nc files 
+    pars={}
+
+    # key run default values:
+    pars["diffK"]=37500. # m2/s
+    pars["crh_ad"]=14.72
+    pars["tau_sub"]=20. # days!
+    pars["cin_radius"]=-99. # switched off by default
+    pars["diurn_opt"]=0
+
+    # COLDPOOL: diffusion K=eps.u.L
+    pars["diffCIN"]=0.25*10*50.e3 # DEFAULT 0.15*10*20.e3
+
+    # velocity scales
+    pars["w_cnv"]=10.
+
+    # convective detrained value
+    # this is 1+IWP/PW, IWP max ~ 3kg/m**2 for 60kg/m**2
+    pars["crh_det"]=1.05
+
+    pars["tau_cin"]=3*3600. # 3 hour lifetime for coldpools (seconds) 
+    pars["cnv_lifetime"]=1800. # e-folding convection detrains for 30mins
+    pars["tau_cnv"]=60. # timescale of convection moistening seconds
+
+    # fake diurnal cycle pars
+    pars["diurn_a"]=0.6
+    pars["diurn_p"]=2
+
+    # initial conditions
+    pars["crh_init_mn"]=0.8 # initial CRH mean
+    pars["crh_init_sd"]=0.0 # initial CRH standard deviation
+
+    # domain size and integration pars:
+    pars["nday"]=5 # short for testing
+    pars["domain_xy"]=500.e3
+    pars["dxy"]=2000.
+    pars["dt"]=60.     # timestep of model
+
+    # diagnostics:
+    pars["nfig_hr"]=24 # freq of maps slices
+    return(pars)
+
+
 def diffusion(fld,a0,a1,ndiff):
     """ diffusion of field using Dufort Frankel explicit scheme"""
     """ argments are fld: 3 slice field"""
@@ -416,50 +461,6 @@ def main(pars):
     nc2.close()
 
 if __name__ == "__main__":
-
-    # NOTE: anything in pars can be controlled from command line
-    # and is saved in both nc files 
-    pars={}
-
-    # key run default values:
-    pars["diffK"]=37500. # m2/s
-    pars["crh_ad"]=14.72
-    pars["tau_sub"]=20. # days!
-    pars["cin_radius"]=-99. # switched off by default
-    pars["diurn_opt"]=0
-
-    # COLDPOOL: diffusion K=eps.u.L
-    pars["diffCIN"]=0.25*10*50.e3 # DEFAULT 0.15*10*20.e3
-
-    # velocity scales
-    pars["w_cnv"]=10.
-
-    # convective detrained value
-    # this is 1+IWP/PW, IWP max ~ 3kg/m**2 for 60kg/m**2
-    pars["crh_det"]=1.05
-
-    pars["tau_cin"]=3*3600. # 3 hour lifetime for coldpools (seconds) 
-    pars["cnv_lifetime"]=1800. # e-folding convection detrains for 30mins
-    pars["tau_cnv"]=60. # timescale of convection moistening seconds
-
-    # fake diurnal cycle pars
-    pars["diurn_a"]=0.6
-    pars["diurn_p"]=2
-
-    # initial conditions
-    pars["crh_init_mn"]=0.8 # initial CRH mean
-    pars["crh_init_sd"]=0.0 # initial CRH standard deviation
-
-    # domain size and integration pars:
-    pars["domain_xy"]=500.e3
-    pars["dxy"]=1000.
-    pars["nday"]=5 # short for testing
-    pars["domain_xy"]=500.e3
-    pars["dxy"]=2000.
-    pars["dt"]=60.     # timestep of model
-
-    # diagnostics:
-    pars["nfig_hr"]=24 # freq of maps slices
-
+    pars=defaults() 
     pars=getargs.getargs(pars)
     main(pars)
