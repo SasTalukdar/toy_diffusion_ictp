@@ -52,27 +52,14 @@ def main(pars):
     """main routine for diff 2d model"""
 
     # split options from dictionary
-
-    diffK=pars["diffK"]
-    tau_sub=pars["tau_sub"]
-    crh_ad=pars["crh_ad"]
-    diurn_opt=pars["diurn_cases"]
-    cin_radius=pars["cin_radius"] # set to negative num to turn off coldpools
     dxy=pars["dxy"]
     dt=pars["dt"]
     domain_x=domain_y=pars["domain_xy"]
 
-    tab="diffK"+str(diffK)+"_tausub"+str(tau_sub)[0:6]+"_crhad"+str(crh_ad)+"_cinrad"+str(cin_radius)+"_diurn"+str(diurn_opt)
-
-    nfig_hr=24
+    tab="diffK"+str(pars["diffK"])+"_tausub"+str(pars["tau_sub"])[0:6]+"_crhad"+str(pars["crh_ad"])+"_cin_radius"+str(pars["cin_radius"])+"_diurn"+str(pars["diurn_opt"])
     sfig_day=0
-
-    # cin_radius=20 # radius of coldpools in km (now passed as argument)
-    # domain size in m
-    
     dx=dy=dxy
     dxkm=dx/1000.
-    #cin_radius/=dxkm # instead of converting to points, scale up the cnvdst
     
     # diurnal cycle: 0="none", 1="weak", 2="strong"
 
@@ -81,36 +68,22 @@ def main(pars):
     ndiff=int(dt/dtdiff)
 
     # initial column RH
-    crh_init=0.8
 
-    # convective detrained value
-    # this is 1+IWP/PW, IWP max ~ 3kg/m**2 for 60kg/m**2
-    crh_det=1.05
 
     # CRH: diffusion K=eps.u.L
     # diffK=0.15*5*50e3    # DEFAULT :  0.4*5*50.e3
     
-    # COLDPOOL: diffusion K=eps.u.L
-    diffCIN=0.25*10*50.e3 # DEFAULT 0.15*10*20.e3
 
     # timescale of subsidence and convection
     #tau_sub=20 # days
-    tau_cnv=60. # seconds
-    tau_cin=3*3600. # 3 hour lifetime for coldpools 
-    cnv_lifetime=1800. # e-folding convection detrains for 30mins
 
     # thresh for cin inhibition 
 
-    # velocity scales
-    w_cnv=10.
 
     # crh_ad from Rushley et al 18, https://doi.org/10.1002/2017GL076296
     #crh_ad=16.12 # trmm v5 
     #crh_ad=14.72 # trmm v7
 
-    # fake diurnal cycle
-    diurn_a=0.6
-    diurn_p=2
     # diurn_o=0.35
 
     
@@ -123,32 +96,32 @@ def main(pars):
     # sub facs
     #
 
-    tau_sub*=86400. # scale to seconds
-    w_sub=15000./tau_sub # subsidence velocity is depth of trop/tau_sub.
-    dt_tau_sub=1.0+dt/tau_sub
-    dt_tau_cnv=dt/tau_cnv
-    dt_tau_cin_fac=1.0+dt/tau_cin
-    dt_tau_cin=dt/tau_cin
+    w_sub=15000./(86400.*pars["tau_sub"]) # subsidence velocity is depth of trop/tau_sub.
+    dt_tau_sub=1.0+dt/(86400.*pars["tau_sub"])
+    dt_tau_cnv=dt/pars["tau_cnv"]
+    dt_tau_cin_fac=1.0+dt/pars["tau_cin"]
+    dt_tau_cin=dt/pars["tau_cin"]
 
     # will assume diffusion same in both directions:
-    alfa=diffK*dtdiff/(dxy*dxy)
+    alfa=pars["diffK"]*dtdiff/(dxy*dxy)
     alf0=(1.0-4.0*alfa)/(1.0+4.0*alfa) # level zero factor 
     alf1=2.*alfa/(1.0+4.0*alfa) # level 1 factor
-    # print(" first alf",diffK,alfa,alf0,alf1)
-    alfacin=diffCIN*dtdiff/(dxy*dxy)
+    # print(" first alf",pars["diffK"],alfa,alf0,alf1)
+    alfacin=pars["diffCIN"]*dtdiff/(dxy*dxy)
     alfcin0=(1.0-4.0*alfacin)/(1.0+4.0*alfacin) # level zero factor 
     alfcin1=2.*alfacin/(1.0+4.0*alfacin) # level 1 factor
 
     #print(" cin alf",alfcin0,alfcin1)
 
-    cnv_death=min(dt/cnv_lifetime,1.0)
+    cnv_death=min(dt/pars["cnv_lifetime"],1.0)
     nx=int(domain_x/dxy)+1 ; ny=int(domain_y/dxy)+1
     x1d=np.linspace(0,domain_x,nx)
     y1d=np.linspace(0,domain_y,nx)
     x,y=np.meshgrid(x1d/1000,y1d/1000) # grid in km
     allidx=np.argwhere(np.zeros([nx,ny])<1) # all true
 
-    print ("opening output"),tab
+    print ("toy_diffusion_2d model of atmosphere")
+    print ("opening output maps/stats:",tab)
 
     # open the netcdf files:
     nc1 = Dataset("td_maps_"+tab+".nc", "w", format="NETCDF4")
@@ -173,7 +146,7 @@ def main(pars):
     var_D2C.units = "km"
     var_D2C.long_name = "Distance to nearest updraft"
 
-    if cin_radius>0:
+    if pars["cin_radius"]>0:
         var_CIN=nc1.createVariable("CIN","f4",("time","y","x",))
         var_CIN.units = "fraction"
 
@@ -184,6 +157,7 @@ def main(pars):
     crh_std = nc2.createVariable("CRH_std","f8",("time",))
     crh_in_new = nc2.createVariable("CRH_new_conv","f8",("time",))
     crh_driest = nc2.createVariable("CRH_driest","f8",("time",))
+    nc2_ncnv = nc2.createVariable("nconv","i8",("time",))
     d2c_95=nc2.createVariable("D2C95","f8",("time",))
     d2c_max=nc2.createVariable("D2C_max","f8",("time",))
     d2c_mean=nc2.createVariable("D2C_mean","f8",("time",))
@@ -201,30 +175,43 @@ def main(pars):
     crh_mean.long_name = "CRH domain mean"
     crh_std.long_name = "CRH domain standard deviation"
     crh_in_new.long_name = "CRH value in new convective locations"
+    nc2_ncnv.long_name="Total number of convective events"
+    nc2_ncnv.units="total number"
 
-    
+    #
     # Global attributes here for both files:
+    #
     nc1.description="2D diffusion model, 2d slice snapshots"
     nc2.description="2D diffusion model, Timeseries statistics"
     nc1.history=nc2.history="Created "+datetime.today().strftime('%Y-%m-%d')
     nc1.source=nc2.source="Adrian Tompkins (tompkins@ictp.it)"
 
+    #
+    # All users defined values in par also saved as global attributes
+    print ("------------")
+    print ("- RUN PARS -")
+    print ("------------")
+    for key,val in pars.items():
+        print (key,"=",val)
+        setattr(nc1,key,pars[key])
+        setattr(nc2,key,pars[key])
+    print ("-----------")
+
     # parameter settings:
-    nc1.diffK=nc2.diffK=diffK
-    nc1.tau_sub=nc2.tau_sub=tau_sub
-    nc1.crh_ad=nc2.crh_ad=float(crh_ad)
-    nc1.crh_det=nc2.crh_det=crh_det
-    nc1.cin_radius=nc2.cin_radius=cin_radius
-    nc1.crh_init=nc2.crh_init=crh_init
-    nc1.cnv_lifetime=nc2.cnv_lifetime=cnv_lifetime
-    nc1.tau_cnv=nc2.tau_cnv=tau_cnv
-    nc1.tau_cin=nc2.tau_cin=tau_cin
-    nc1.diffCIN=nc2.diffCIN=diffCIN
-    nc1.w_cnv=nc2.w_cnv=w_cnv
-    nc1.diurn=nc2.diurn=diurn_opt
-    nc1.diurn_p=nc2.diurn_p=diurn_p
-    nc1.diurn_a=nc2.diurn_a=diurn_a
-    nc1.dt=nc2.dt=dt
+#    nc1.diffK=nc2.diffK=pars["diffK"]
+#    nc1.tau_sub=nc2.tau_sub=tau_sub
+#    nc1.crh_ad=nc2.crh_ad=float(crh_ad)
+#    nc1.crh_det=nc2.crh_det=crh_det
+    #nc1.cin_radius=nc2.cin_radius=cin_radius
+    #nc1.crh_init_mn=nc2.crh_init_mn=pars["crh_init_mn"]
+    #nc1.crh_init_sd=nc2.crh_init_sd=pars["crh_init_sd"]
+    #nc1.cnv_lifetime=nc2.cnv_lifetime=cnv_lifetime
+    #nc1.tau_cnv=nc2.tau_cnv=tau_cnv
+    #nc1.tau_cin=nc2.tau_cin=tau_cin
+#    nc1.diffCIN=nc2.diffCIN=diffCIN
+#    nc1.w_cnv=nc2.w_cnv=w_cnv
+    #nc1.diurn=nc2.diurn=diurn_opt
+
 
     var_y.units = "km"
     var_x.units = "km"
@@ -234,7 +221,6 @@ def main(pars):
     var_y[:]=y1d*dxkm
     var_x[:]=x1d*dxkm
 
-    print ("opening file 2")    
     # file 2 is the timeseries file
 
     # number of timesteps:
@@ -243,19 +229,19 @@ def main(pars):
     days=times*dt/86400.
 
     # total number of events to distribute
-    ncnv_tot=int(nt*nx*ny*w_sub/w_cnv)
+    ncnv_tot=int(nt*nx*ny*w_sub/pars["w_cnv"])
 
     #
     # set up plots, timeseries
     #
 
     # 3 options of diurnal cycle!
-    if diurn_opt==0:
+    if pars["diurn_opt"]==0:
         pdiurn=np.ones(nt)
-    if diurn_opt==1:
-        pdiurn=diurn_a*np.sin(np.pi*2*times*dt/86400.)+1.0
-    if diurn_opt==2:
-        pdiurn=(np.sin(np.pi*2*times*dt/86400.)+1.0)**diurn_p
+    if pars["diurn_opt"]==1:
+        pdiurn=pars["diurn_a"]*np.sin(np.pi*2*times*dt/86400.)+1.0
+    if pars["diurn_opt"]==2:
+        pdiurn=(np.sin(np.pi*2*times*dt/86400.)+1.0)**pars["diurn_p"]
 
     pdiurn/=np.sum(pdiurn) # probs must add to 1
 
@@ -264,10 +250,12 @@ def main(pars):
     # 
     ncnv=np.bincount(np.random.choice(times,ncnv_tot,p=pdiurn),minlength=nt)
     ncnv_overflow=0 # storage for overflow 
-    Nsmth=int(cnv_lifetime/dt) # need to smooth to lifetime of convection
+    Nsmth=int(pars["cnv_lifetime"]/dt) # need to smooth to lifetime of convection
     if Nsmth>1:
         ncnv=uniform_filter1d(ncnv,size=Nsmth)
 
+    # save to netcdf
+        
 
     # index for convection locations, 0 or 1 
     cnv_idx=np.zeros([nx,ny],dtype=np.int)
@@ -276,7 +264,7 @@ def main(pars):
     cin=np.zeros([3,nx,ny])
 
     # crh, 3 time-level DF explicit scheme:
-    crh=np.random.normal(loc=crh_init,scale=0.01,size=[3,nx,ny])
+    crh=np.random.normal(loc=pars["crh_init_mn"],scale=pars["crh_init_sd"],size=[3,nx,ny])
 
     # TEST top hat
     mp=int(nx/2)
@@ -318,7 +306,7 @@ def main(pars):
         #
         # now need to decide where to put the new events, 
         # bretherton updated CRH - with Craig adjustment
-        prob_crh=np.exp(crh_ad*crh[1,:,:])-1.0
+        prob_crh=np.exp(pars["crh_ad"]*crh[1,:,:])-1.0
 
         # fudge to stop 2 conv in one place, coldpool will sort
         prob_crh*=(1-cnv_idx)
@@ -331,7 +319,7 @@ def main(pars):
 
         # product of 2:
         prob=prob_crh
-        if cin_radius>0:
+        if pars["cin_radius"]>0:
             prob*=prob_cin # switch off coldpools here:
         prob/=np.sum(prob) # normalized
         prob1d=prob.flatten()
@@ -354,13 +342,14 @@ def main(pars):
 
         # update humidity
         # collape conv array again # Q_Detrain where conv, zero otherwise
-        crh[1,:,:]=(crh[1,:,:]+cnv_idx*crh_det*dt_tau_cnv)/(1.0+cnv_idx*dt_tau_cnv)
+        crh[1,:,:]=(crh[1,:,:]+cnv_idx*pars["crh_det"]*dt_tau_cnv)/(1.0+cnv_idx*dt_tau_cnv)
 
         #
         # calculate distance to convection 
         #
         cnv_coords=np.argwhere(cnv_idx) #need to update to include new events
         ncnv_curr=np.sum(cnv_idx)
+        nc2_ncnv[it]=ncnv_curr
         if ncnv_curr>0:
             #cnvdst*=dxkm
             for xoff in [0,nx,-nx]:
@@ -382,8 +371,8 @@ def main(pars):
         #
         # update coldpool here
         #
-        if cin_radius>0:
-            maskcin=np.where(cnvdst<cin_radius,1,0)
+        if pars["cin_radius"]>0:
+            maskcin=np.where(cnvdst<pars["cin_radius"],1,0)
             cin[1,:,:]=cin[1,:,:]+maskcin # all conv points sets to 1
             cin=np.clip(cin,0,1)
             # cin[1,:,:]*=dt_tau_cin_fac # implicit
@@ -413,11 +402,11 @@ def main(pars):
 
         
         day=it*dt/86400
-        if (it*dt)%(nfig_hr*3600)==0:
+        if (it*dt)%(pars["nfig_hr"]*3600)==0:
             var_time1[nccnt]=it*dt
             var_CRH[nccnt,:,:]=crh[1,:,:]     
             var_D2C[nccnt,:,:]=cnvdst     
-            if cin_radius>0:
+            if pars["cin_radius"]>0:
                 var_CIN[nccnt,:,:]=cin[1,:,:]     
 
             nccnt+=1
@@ -428,18 +417,49 @@ def main(pars):
 
 if __name__ == "__main__":
 
-    # default values: crhad from bretherton et al update 2017
+    # NOTE: anything in pars can be controlled from command line
+    # and is saved in both nc files 
     pars={}
 
-    # default values that can be overwritten:
+    # key run default values:
     pars["diffK"]=37500. # m2/s
     pars["crh_ad"]=14.72
     pars["tau_sub"]=20. # days!
     pars["cin_radius"]=-99. # switched off by default
-    pars["diurn_cases"]=0
+    pars["diurn_opt"]=0
+
+    # COLDPOOL: diffusion K=eps.u.L
+    pars["diffCIN"]=0.25*10*50.e3 # DEFAULT 0.15*10*20.e3
+
+    # velocity scales
+    pars["w_cnv"]=10.
+
+    # convective detrained value
+    # this is 1+IWP/PW, IWP max ~ 3kg/m**2 for 60kg/m**2
+    pars["crh_det"]=1.05
+
+    pars["tau_cin"]=3*3600. # 3 hour lifetime for coldpools (seconds) 
+    pars["cnv_lifetime"]=1800. # e-folding convection detrains for 30mins
+    pars["tau_cnv"]=60. # timescale of convection moistening seconds
+
+    # fake diurnal cycle pars
+    pars["diurn_a"]=0.6
+    pars["diurn_p"]=2
+
+    # initial conditions
+    pars["crh_init_mn"]=0.8 # initial CRH mean
+    pars["crh_init_sd"]=0.0 # initial CRH standard deviation
+
+    # domain size and integration pars:
+    pars["domain_xy"]=500.e3
+    pars["dxy"]=1000.
     pars["nday"]=5 # short for testing
     pars["domain_xy"]=500.e3
     pars["dxy"]=2000.
-    pars["dt"]=60.
+    pars["dt"]=60.     # timestep of model
+
+    # diagnostics:
+    pars["nfig_hr"]=24 # freq of maps slices
+
     pars=getargs.getargs(pars)
     main(pars)
