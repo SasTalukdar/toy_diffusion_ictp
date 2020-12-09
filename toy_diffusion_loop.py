@@ -11,49 +11,55 @@ import ast
 def main(argv):
     """ entry point"""
 
-    lparallel=True
+    lparallel=False
 
     f=open("diffusion_results.txt","w")
     f.close()
 
     # base defaults in toy_diffusion model now.
-    pars=toy_diffusion_2d.default()
+    pars=toy_diffusion_2d.defaults()
 
     # need to refer to these dictionaries in the following, and looop. 
     
     odir="./"
 
-    arglist=["help","diffK=","crh_ad=","tau_sub=","odir=","nfig_hr=","cin_radius","dt=","nday="]
+    arglist=["help","diffK=","crh_ad=","diurn_opt=","tau_sub=","odir=","nfig_hr=","cin_radius=","dt=","nday="]
     try:
         opts, args = getopt.getopt(argv,"h",arglist)
     except getopt.GetoptError:
+        print ("arg error")
         print (argv)
+   
         sys.exit(2)
 
+    # REPLACE with argparse but handling equiv lists.
     for opt, arg in opts:
         if opt in ("-h","--help"):
             print ("check out this list: ",arglist)
             sys.exit()
         elif opt in ("--diffK"):
-            diffK = ast.literal_eval(arg)
+            pars["diffK"] = ast.literal_eval(arg)
         elif opt in ("--crh_ad"):
-            crh_ad = ast.literal_eval(arg)
+            pars["crh_ad"] = ast.literal_eval(arg)
         elif opt in ("--tau_sub"):
-            tau_sub = ast.literal_eval(arg)
+            pars["tau_sub"] = ast.literal_eval(arg)
         elif opt in ("--cin_radius"):
-            cin_radius = ast.literal_eval(arg)
+            pars["cin_radius"] = ast.literal_eval(arg)
+        elif opt in ("--diurn_opt"):
+            pars["diurn_opt"] = ast.literal_eval(arg)
         elif opt in ("--nfig_hr"):
-            nfig_hr = int(arg)
+            pars["nfig_hr"] = int(arg)
         elif opt in ("--nday"):
-            nday = int(arg)
+            pars["nday"] = int(arg)
         elif opt in ("--dt"):
-            dt = float(arg)
+            pars["dt"] = float(arg)
         elif opt in ("--odir"):
-            odir = arg
+            pars["odir"] = arg
 
     # make a list of dictionaries with ALL combinations of the 3 arguments
-    arglist=[{"diffK":d,"tau_sub":t,"crh_ad":c,"nfig_hr":nfig_hr,"odir":odir,"cin_radius":cr,"diurn_cases":dc,"domain_xy":domain_xy,"nday":nday,"dxy":dxy,"dt":dt} for d in diffK for t in tau_sub for c in crh_ad for cr in cin_radius for dc in diurn_cases ]    
-    #
+#    arglist=[{"diffK":d,"tau_sub":t,"crh_ad":c,"nfig_hr":pars["nfig_hr"],"cin_radius":cr,"diurn_opt":dc,"domain_xy":pars["domain_xy"],"nday":pars["nday"],"dxy":pars["dxy"],"dt":pars["dt"]} for d in pars["diffK"] for t in pars["tau_sub"] for c in pars["crh_ad"] for cr in pars["cin_radius"] for dc in pars["diurn_opt"] ]    
+
+    arglist=[{**pars,"diffK":d,"tau_sub":t,"crh_ad":c,"cin_radius":cr,"diurn_opt":dc} for d in pars["diffK"] for t in pars["tau_sub"] for c in pars["crh_ad"] for cr in pars["cin_radius"] for dc in pars["diurn_opt"]]
 
     print("check ",arglist)
 
@@ -65,10 +71,11 @@ def main(argv):
         os.system('taskset -cp 0-%d %s' % (ncore, os.getpid()))
         with Pool(processes=ncore) as p:
             p.map(toy_diffusion_2d.main,arglist)
-        print ("done")
+        print ("done parallel")
     else: # serial model
         for args in arglist:
              toy_diffusion_2d.main(args)
+        print ("done serial")
 
 if __name__ == "__main__":
     main(sys.argv[1:])
