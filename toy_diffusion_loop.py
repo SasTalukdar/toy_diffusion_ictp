@@ -11,7 +11,7 @@ import ast
 def main(argv):
     """ entry point"""
 
-    lparallel=False
+    lparallel=True
 
     f=open("diffusion_results.txt","w")
     f.close()
@@ -38,15 +38,15 @@ def main(argv):
             print ("check out this list: ",arglist)
             sys.exit()
         elif opt in ("--diffK"):
-            pars["diffK"] = ast.literal_eval(arg)
+            list_diffK = ast.literal_eval(arg)
         elif opt in ("--crh_ad"):
-            pars["crh_ad"] = ast.literal_eval(arg)
+            list_crh_ad = ast.literal_eval(arg)
         elif opt in ("--tau_sub"):
-            pars["tau_sub"] = ast.literal_eval(arg)
+            list_tau_sub = ast.literal_eval(arg)
         elif opt in ("--cin_radius"):
-            pars["cin_radius"] = ast.literal_eval(arg)
+            list_cin_radius = ast.literal_eval(arg)
         elif opt in ("--diurn_opt"):
-            pars["diurn_opt"] = ast.literal_eval(arg)
+            list_diurn_opt = ast.literal_eval(arg)
         elif opt in ("--nfig_hr"):
             pars["nfig_hr"] = int(arg)
         elif opt in ("--nday"):
@@ -59,7 +59,7 @@ def main(argv):
     # make a list of dictionaries with ALL combinations of the 3 arguments
 #    arglist=[{"diffK":d,"tau_sub":t,"crh_ad":c,"nfig_hr":pars["nfig_hr"],"cin_radius":cr,"diurn_opt":dc,"domain_xy":pars["domain_xy"],"nday":pars["nday"],"dxy":pars["dxy"],"dt":pars["dt"]} for d in pars["diffK"] for t in pars["tau_sub"] for c in pars["crh_ad"] for cr in pars["cin_radius"] for dc in pars["diurn_opt"] ]    
 
-    arglist=[{**pars,"diffK":d,"tau_sub":t,"crh_ad":c,"cin_radius":cr,"diurn_opt":dc} for d in pars["diffK"] for t in pars["tau_sub"] for c in pars["crh_ad"] for cr in pars["cin_radius"] for dc in pars["diurn_opt"]]
+    arglist=[{**pars,"diffK":d,"tau_sub":t,"crh_ad":c,"cin_radius":cr,"diurn_opt":dc} for d in list_diffK for t in list_tau_sub for c in list_crh_ad for cr in list_cin_radius for dc in list_diurn_opt]
 
     print("check ",arglist)
 
