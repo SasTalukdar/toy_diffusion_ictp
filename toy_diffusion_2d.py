@@ -78,7 +78,7 @@ def defaults():
     pars["dt"]=60.     # timestep of model
 
     # diagnostics:
-    pars["nfig_hr"]=24 # freq of maps slices
+    pars["nfig_hr"]=6 # freq of maps slices
     return(pars)
 
 
@@ -275,8 +275,8 @@ def main(pars):
     var_time1.units=var_time2.units="seconds since 2000-01-01 00:00:00.0"
     var_time1.calendar=var_time2.calendar="gregorian"
 
-    var_y[:]=y1d*dxkm
-    var_x[:]=x1d*dxkm
+    var_y[:]=y1d
+    var_x[:]=x1d
 
     # file 2 is the timeseries file
 
