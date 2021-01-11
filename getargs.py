@@ -4,14 +4,18 @@ import argparse
 
 def getargs(defaultpars):
     parser = argparse.ArgumentParser(description='Dynamic arguments')
-    for key,val in defaultpars.items():
-        parser.add_argument('--'+key,type=type(val))
-    newpars=vars(parser.parse_args())
-    for key,val in newpars.items():
-        if val==None:
-            newpars[key]=defaultpars[key]
-    return(newpars)
-
-
-
+    namespace = argparse.Namespace(**defaultpars)
+    # add each key of the default dictionary as an argument
+    # expecting the same type 
+    for key, val in defaultpars.items():
+        try:
+            typ = type(val[0])
+            nargs = "+"
+        except TypeError:
+            typ = type(val)
+            nargs = None
+        parser.add_argument('--'+key, nargs=nargs, type=typ)
+        #parser.add_argument('--'+key, type=type(val))
+    parser.parse_args(namespace=namespace)
+    return vars(namespace)
 
