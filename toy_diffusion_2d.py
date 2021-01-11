@@ -8,6 +8,7 @@ import numpy as np
 from netCDF4 import Dataset
 import ast 
 import getargs
+import subprocess
 
 #
 # this is a new version of the diffusion code in 2D
@@ -40,6 +41,8 @@ def defaults():
 
     # key run default values:
     pars["diffK"]=37500. # m2/s
+    # crh_ad from Rushley et al 18, https://doi.org/10.1002/2017GL076296
+    # See also Bretherton ref therein, 16.12=trmm v5, 14.72 = trmm v7
     pars["crh_ad"]=14.72
     pars["tau_sub"]=20. # days!
     pars["cin_radius"]=-99. # switched off by default
@@ -52,7 +55,8 @@ def defaults():
     pars["w_cnv"]=10.
 
     # convective detrained value
-    # this is 1+IWP/PW, IWP max ~ 3kg/m**2 for 60kg/m**2
+    # this is 1+L-IWP/PW, IWP max ~ 3kg/m**2 for 60kg/m**2 PW
+    # IWP refs from CloudSat
     pars["crh_det"]=1.05
 
     pars["tau_cin"]=3*3600. # 3 hour lifetime for coldpools (seconds) 
@@ -61,7 +65,7 @@ def defaults():
 
     # fake diurnal cycle pars
     pars["diurn_a"]=0.6
-    pars["diurn_p"]=2
+    pars["diurn_p"]=2.0
 
     # initial conditions
     pars["crh_init_mn"]=0.8 # initial CRH mean
@@ -74,7 +78,7 @@ def defaults():
     pars["dt"]=60.     # timestep of model
 
     # diagnostics:
-    pars["nfig_hr"]=24 # freq of maps slices
+    pars["nfig_hr"]=6 # freq of maps slices
     return(pars)
 
 
@@ -96,7 +100,13 @@ def diffusion(fld,a0,a1,ndiff):
 def main(pars):
     """main routine for diff 2d model"""
 
-    # split options from dictionary
+    execute=sys.argv[0]
+    try:
+        version=subprocess.check_output(["git", "describe"]).strip()
+    except: 
+        version="unknown"
+
+    # split some options from dictionary
     dxy=pars["dxy"]
     dt=pars["dt"]
     domain_x=domain_y=pars["domain_xy"]
@@ -125,9 +135,6 @@ def main(pars):
     # thresh for cin inhibition 
 
 
-    # crh_ad from Rushley et al 18, https://doi.org/10.1002/2017GL076296
-    #crh_ad=16.12 # trmm v5 
-    #crh_ad=14.72 # trmm v7
 
     # diurn_o=0.35
 
@@ -230,6 +237,11 @@ def main(pars):
     nc2.description="2D diffusion model, Timeseries statistics"
     nc1.history=nc2.history="Created "+datetime.today().strftime('%Y-%m-%d')
     nc1.source=nc2.source="Adrian Tompkins (tompkins@ictp.it)"
+    nc1.center=nc2.center="International Centre for Theoretical Physics (ICTP)"
+    nc1.exe=nc2.exe=execute
+    nc1.version=nc2.version=version
+
+
 
     #
     # All users defined values in par also saved as global attributes
@@ -263,8 +275,8 @@ def main(pars):
     var_time1.units=var_time2.units="seconds since 2000-01-01 00:00:00.0"
     var_time1.calendar=var_time2.calendar="gregorian"
 
-    var_y[:]=y1d*dxkm
-    var_x[:]=x1d*dxkm
+    var_y[:]=y1d
+    var_x[:]=x1d
 
     # file 2 is the timeseries file
 

@@ -41,7 +41,7 @@ def main(argv):
         ncore=12
 
     #
-    diurn_opt=[0,2]
+    diurn_cases=[0,2]
     cin_radius=[2,4,6,8]
 
     # make the vectors of values here
@@ -88,7 +88,7 @@ def main(argv):
                     fh.writelines("export NETCDF_LIB=$(nf-config --flibs)\n")
                     fh.writelines("export NETCDF_INCLUDE=$(nf-config --fflags)\n")
                     fh.writelines("export FC=`nf-config --fc`\n")
-                    fh.writelines('python3 ~/diffusion/toy_diffusion/toy_diffusion_loop.py --nday={} --diffK="{}" --tau_sub="{}" --crh_ad="{}" --diurn_opt="{}" --cin_radius="{}" \n'.format(150,diffK,taulist,[crh],diurn_opt,[cr]))
+                    fh.writelines('python3 ~/diffusion/toy_diffusion/toy_diffusion_loop.py --diffK="{}" --tau_sub="{}" --crh_ad="{}" --diurn_cases="{}" --cin_radius="{}" \n'.format(diffK,taulist,[crh],diurn_cases,[cr]))
 
         #jobid=os.system("sbatch "+jobfile)
                 command=["sbatch","--parsable",jobfile]
