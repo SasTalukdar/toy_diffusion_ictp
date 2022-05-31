@@ -1,31 +1,24 @@
 #!/bin/python
 
-# this uses SLURM dependencies to loop over dates
-# we could submit each model and rcp here too, using the serial queue 
-# but that will be slow due to limit of runnign jobs per person
-# so i will farm out the model and rcp to another python script which splits the tasks
-
+#SLURM dependencies are used to loop over data
 
 import os, sys, getopt
 import subprocess
 from glob import glob
-#srcdir="/home/netapp-clima/users/tompkins/ISIMIP2/"
 
 def main(argv):
-    """ entry point"""
 
-    # send email to user:
+    #An email is sent to the user
     email=os.environ["USER"]+"@ictp.it"
 
-    # get the queue string
+    #Get the queue string (default is esp1)
     try:
         opts, args = getopt.getopt(argv,"h",["queue="])
     except getopt.GetoptError:
         print (argv)
         sys.exit(2)
-
-    queue="esp1" # default queue
-
+    queue="esp1"
+    
     for opt, arg in opts:
         if opt in ("-h","--help"):
             print("pass the queue string")
@@ -40,34 +33,24 @@ def main(argv):
     if queue=="long":
         ncore=12
 
-    #
-    diurn_opt=[0,2]
-    cin_radius=[2,4,6,8]
-
-    # make the vectors of values here
-    #diffK=[1.3**i for i in range(27,43)]
+    #Creation of the vectors of values
     diffK=[5000,7000,10000,15000,20000]
 
     tau_sub=[i for i in range(5,30,5)]
 
-    # chunk the tau_sub array?
-    if False:
-       nchunk=6 # 3 runs at a time?
-       tau_sub=[tau_sub[i:i+nchunk] for i in range(0,len(tau_sub),nchunk)]
-    else:
-       tau_sub=[tau_sub]
- 
-    #
-    #crh_ad=[10,12,14,18,20,22]+[14.72,16.12]
-    # short test run for long queue (max 6 jobs)
-    #crh_ad=[10,12,14,16,18,20]
+    #The vectors tau_sub and a_d can be conveniently chunked to optimize the use of single nodes
+    nchunk=1
+    tau_sub=[tau_sub[i:i+nchunk] for i in range(0,len(tau_sub),nchunk)]
 
-    # test single job only
-    crh_ad=[16.12]
-
+    crh_ad=[14.72]
+    nchunk_ad=1
+    crh_ad=[crh_ad[i:i+nchunk_ad] for i in range(0,len(crh_ad),nchunk_ad)]
     
+    diurn_opt=[0]
+    
+    cin_radius=[-99]
 
-    # will make ONE job for each crh_ad and these loop over the other two variables.
+    #Loop over the variables
     for itau,taulist in enumerate(tau_sub):
         for icrh,crh in enumerate(crh_ad):
             for icr,cr in enumerate(cin_radius):
@@ -88,9 +71,8 @@ def main(argv):
                     fh.writelines("export NETCDF_LIB=$(nf-config --flibs)\n")
                     fh.writelines("export NETCDF_INCLUDE=$(nf-config --fflags)\n")
                     fh.writelines("export FC=`nf-config --fc`\n")
-                    fh.writelines('python3 ~/diffusion/toy_diffusion/toy_diffusion_loop.py --nday={} --diffK="{}" --tau_sub="{}" --crh_ad="{}" --diurn_opt="{}" --cin_radius="{}" \n'.format(150,diffK,taulist,[crh],diurn_opt,[cr]))
+                    fh.writelines('python3 ~/diffusion/toy_diffusion/toy_diffusion_loop.py --nday={} --dt="{}" --diffK="{}" --tau_sub="{}" --crh_ad="{}" --crh_init_mn="{}" --domain_xy="{}" --dxy="{}" --diurn_opt="{}" --cin_radius="{}" \n'.format(180,30,diffK,taulist,crh, 0.8, 300e3, 2e3, diurn_opt,[cr]))
 
-        #jobid=os.system("sbatch "+jobfile)
                 command=["sbatch","--parsable",jobfile]
                 jobid=subprocess.check_output(command)
                 jobid=jobid.decode('utf-8')
