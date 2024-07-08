@@ -18,13 +18,13 @@ def defaults():
     pars={}
     
     #Horizontal moisture diffusion coefficient (same in both directions, in m**2/s)
-    pars["diffK"]=37500.
+    pars["diffK"]=10000. # 37500.
     
     #Steepness of the exponential function governing the choice of convective locations. Default is from TRMM retrieval version 7 (see Rushley et al. (2018), https://doi.org/10.1002/2017GL076296; see also Bretherton et al. (2004), https://doi.org/10.1175/1520-0442(2004)017<1517:RBWVPA>2.0.CO;2, and references therein)
     pars["crh_ad"]=14.72
     
     #Subsidence drying timescale (in days, not seconds!)
-    pars["tau_sub"]=20.
+    pars["tau_sub"]=16. # 20.
     
     #Convective inhibition radius (km) due to the effect of cold pols. Setting cin_radius to a negative value switches off cold pools by default.
     pars["cin_radius"]=-99
