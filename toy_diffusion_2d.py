@@ -128,7 +128,7 @@ def main(pars):
     dummy_idx=np.arange(0,nx*ny,1)
     
     #Initialization of the array for convective locations
-    cnv_idx=np.zeros([nx,ny],dtype=np.int)
+    cnv_idx=np.zeros([nx,ny],dtype=int)
 
     #-------------------
     #Definition of some derived quantities
