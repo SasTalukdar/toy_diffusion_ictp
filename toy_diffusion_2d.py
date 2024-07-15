@@ -238,6 +238,14 @@ def main(pars):
     var_CRH.long_name="Column total water relative humidity"
     var_CRH.units="fraction"
     
+    probabilities = nc1.createVariable("PROB","f4",("time","y","x",))
+    probabilities.long_name = "Probabilities"
+    probabilities.units = 'percentage'
+
+    cin_grad_save = nc1.createVariable("CIN_grad","f4",("time","y","x",))
+    cin_grad_save.long_name = "gradient"
+    cin_grad_save.units = 'cin unit'
+    
     var_D2C=nc1.createVariable("D2C","f4",("time","y","x",))
     var_D2C.long_name="Distance to nearest updraft"
     var_D2C.units="km"
@@ -477,7 +485,9 @@ def main(pars):
         if it%int(pars["nfig_hr"]*3600/dt)==0:
             var_time1[nccnt]=it*dt
             var_CRH[nccnt,:,:]=crh     
-            var_D2C[nccnt,:,:]=cnvdst     
+            var_D2C[nccnt,:,:]=cnvdst
+            probabilities[nccnt,:,:]=prob   
+            cin_grad_save[nccnt,:,:]=cin_grad
             if pars["cin_radius"]>0:
                 var_CIN[nccnt,:,:]=cin       
             nccnt+=1
