@@ -10,6 +10,7 @@ from netCDF4 import Dataset
 import ast 
 import getargs
 import subprocess
+from tqdm import tqdm
 
 #The model's governing equation is dR/dt= C - D - S, where R is column total water relative humidity (CRH), C is the convective moistening term, D represents the spatial moisture exchange and S is the subsidence drying. C is modeled as a fast relaxation process to detrained water vapour and cloud condensate, D according to a down-gradient approach with constant coefficient K, S as a relaxation term with uniform timescale towards a dry atmosphere. C does not act on the entire domain: the convection occurs only in the grid cells where an indicator function is activated, based on a random sampling from a non-uniform, CRH-dependent probability distribution function (PDF). The PDF is derived from the nonlinear moisture-precipitation relationship by Bretherton et al. (2004), revised by Rushley et al. (2018). It is also possible to distribute convective events over the day according to a diurnal cycle representation and account for the inhibition effect of cold pools.    
 
@@ -18,13 +19,13 @@ def defaults():
     pars={}
     
     #Horizontal moisture diffusion coefficient (same in both directions, in m**2/s)
-    pars["diffK"]=10000. # 37500.
+    pars["diffK"]=37500.
     
     #Steepness of the exponential function governing the choice of convective locations. Default is from TRMM retrieval version 7 (see Rushley et al. (2018), https://doi.org/10.1002/2017GL076296; see also Bretherton et al. (2004), https://doi.org/10.1175/1520-0442(2004)017<1517:RBWVPA>2.0.CO;2, and references therein)
     pars["crh_ad"]=14.72
     
     #Subsidence drying timescale (in days, not seconds!)
-    pars["tau_sub"]=16. # 20.
+    pars["tau_sub"]=20.
     
     #Convective inhibition radius (km) due to the effect of cold pols. Setting cin_radius to a negative value switches off cold pools by default.
     pars["cin_radius"]=-99
@@ -45,6 +46,11 @@ def defaults():
     #Coldpools: diffusion coefficient (m**2/s) and lifetime (seconds)
     pars["diffCIN"]=0.25*10*50.e3
     pars["tau_cin"]=3*3600.
+    
+    #Sas's doing
+    #Coldpools: diffusion coefficient (m**2/s) and lifetime (seconds)
+    pars["diffCAPE"]=0.05*10*50.e3
+    pars["tau_cape"]=3*3600.
 
     #Different diurnal cycle specifications (active only if diurn_opt != 0)  
     pars["diurn_a"]=0.6
@@ -181,6 +187,24 @@ def main(pars):
     z_cin[0] = 1+alpha_cin
     z_cin[1] = -beta_cin
     z_cin[-1] = -beta_cin
+    
+    #Sas's doing
+    #-------------------
+    #Quantities for the solution of the problem with cold pools lifting
+
+    beta_cape=.5*pars["diffCAPE"]*dt/dxy**2
+    alpha_cape = 2*beta_cape
+    omega_cape = .5*dt/pars["tau_cape"]
+    x_cape = np.zeros((ny,nx))
+    y_cape = np.zeros(nx)
+    y_cape[0] = 1+omega_cape+alpha_cape
+    y_cape[1] = -beta_cape
+    y_cape[-1] = -beta_cape
+
+    z_cape = np.zeros(nx)
+    z_cape[0] = 1+alpha_cape
+    z_cape[1] = -beta_cape
+    z_cape[-1] = -beta_cape
     
     #-------------------
     #Netcdf output files
@@ -328,7 +352,7 @@ def main(pars):
     cin=np.zeros([nx,ny])
 
     #Loop over time
-    for it in range(nt):
+    for it in tqdm(range(nt)):
          
         #-------------------
         #Determining the number ncnv_new of NEW convective events
@@ -420,6 +444,11 @@ def main(pars):
                    
             #Solution of the differential problem for CIN with ADI method            
             cin = ADI(cin, alpha_cin, beta_cin, omega_cin, nx, ny, x_cin, y_cin, z_cin)
+            
+            #put cold pool here
+            cin_grad=np.sqrt(np.nansum(np.array(np.gradient(cin))**2,axis=0)) #Sas's doing
+            
+            ########
             cin=np.clip(cin,0,1)
 
         #At each time step, some convective cells may be randomly killed
