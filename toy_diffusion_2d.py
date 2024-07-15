@@ -72,7 +72,7 @@ def defaults():
 
     #Diagnostics for a netcdf output file with maps
     #Frequency of maps slices (one map every nfig_hr hours)
-    pars["nfig_hr"]=6.
+    pars["nfig_hr"]=1./120.
 
     return(pars)
     
@@ -242,9 +242,6 @@ def main(pars):
     probabilities.long_name = "Probabilities"
     probabilities.units = 'percentage'
 
-    cin_grad_save = nc1.createVariable("CIN_grad","f4",("time","y","x",))
-    cin_grad_save.long_name = "gradient"
-    cin_grad_save.units = 'cin unit'
     
     var_D2C=nc1.createVariable("D2C","f4",("time","y","x",))
     var_D2C.long_name="Distance to nearest updraft"
@@ -253,6 +250,10 @@ def main(pars):
     if pars["cin_radius"]>0:
         var_CIN=nc1.createVariable("CIN","f4",("time","y","x",))
         var_CIN.units="fraction"
+        
+        cin_grad_save = nc1.createVariable("CIN_grad","f4",("time","y","x",))
+        cin_grad_save.long_name = "gradient"
+        cin_grad_save.units = 'cin unit'
    
    #Counter for the number of overwritings of the maps file 
     nccnt = 0
@@ -487,9 +488,9 @@ def main(pars):
             var_CRH[nccnt,:,:]=crh     
             var_D2C[nccnt,:,:]=cnvdst
             probabilities[nccnt,:,:]=prob   
-            cin_grad_save[nccnt,:,:]=cin_grad
             if pars["cin_radius"]>0:
                 var_CIN[nccnt,:,:]=cin       
+                cin_grad_save[nccnt,:,:]=cin_grad
             nccnt+=1
 
     nc1.close()
