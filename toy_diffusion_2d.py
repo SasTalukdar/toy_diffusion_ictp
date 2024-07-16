@@ -12,6 +12,19 @@ import getargs
 import subprocess
 from tqdm import tqdm
 
+import numpy as np
+from scipy.ndimage import convolve
+
+def find_0_nearby_1(x):
+    kernel = np.array([[1, 1, 1],
+                       [1, 0, 1],
+                       [1, 1, 1]])
+    neighbors_are_1 = convolve((x == 1).astype(int), kernel, mode='constant', cval=0) > 0
+    x[(x == 0) & neighbors_are_1] = 2
+    x[x==1]=0
+    x[x==2]=1
+    return x
+
 #The model's governing equation is dR/dt= C - D - S, where R is column total water relative humidity (CRH), C is the convective moistening term, D represents the spatial moisture exchange and S is the subsidence drying. C is modeled as a fast relaxation process to detrained water vapour and cloud condensate, D according to a down-gradient approach with constant coefficient K, S as a relaxation term with uniform timescale towards a dry atmosphere. C does not act on the entire domain: the convection occurs only in the grid cells where an indicator function is activated, based on a random sampling from a non-uniform, CRH-dependent probability distribution function (PDF). The PDF is derived from the nonlinear moisture-precipitation relationship by Bretherton et al. (2004), revised by Rushley et al. (2018). It is also possible to distribute convective events over the day according to a diurnal cycle representation and account for the inhibition effect of cold pools.    
 
 ### KEY RUN DEFAULT VALUES ###
@@ -19,16 +32,16 @@ def defaults():
     pars={}
     
     #Horizontal moisture diffusion coefficient (same in both directions, in m**2/s)
-    pars["diffK"]=37500.
+    pars["diffK"]=10000.
     
     #Steepness of the exponential function governing the choice of convective locations. Default is from TRMM retrieval version 7 (see Rushley et al. (2018), https://doi.org/10.1002/2017GL076296; see also Bretherton et al. (2004), https://doi.org/10.1175/1520-0442(2004)017<1517:RBWVPA>2.0.CO;2, and references therein)
     pars["crh_ad"]=14.72
     
     #Subsidence drying timescale (in days, not seconds!)
-    pars["tau_sub"]=20.
+    pars["tau_sub"]=16.
     
     #Convective inhibition radius (km) due to the effect of cold pols. Setting cin_radius to a negative value switches off cold pools by default.
-    pars["cin_radius"]=-99
+    pars["cin_radius"]=1
 
     #Option to include the diurnal cycle, if = 0 no diurnal cycle is considered
     pars["diurn_opt"]=0
@@ -44,13 +57,14 @@ def defaults():
     pars["cnv_lifetime"]=1800.
     
     #Coldpools: diffusion coefficient (m**2/s) and lifetime (seconds)
-    pars["diffCIN"]=0.25*10*50.e3
+    pars["diffCIN"]=9e3#0.25*10*50.e3
     pars["tau_cin"]=3*3600.
     
     #Sas's doing
     #Coldpools: diffusion coefficient (m**2/s) and lifetime (seconds)
-    pars["diffCAPE"]=0.05*10*50.e3
+    pars["diffCAPE"]=9e3
     pars["tau_cape"]=3*3600.
+    pars["cp_vel"]=10 #m/s
 
     #Different diurnal cycle specifications (active only if diurn_opt != 0)  
     pars["diurn_a"]=0.6
@@ -63,16 +77,20 @@ def defaults():
     #Experimental configuration
     
     #Total simulated time (days) and timestep (seconds)
-    pars["nday"]=5
+    pars["nday"]=1
     pars["dt"]=30.
     
     #Domain size (m) and horizontal resolution (m)
-    pars["domain_xy"]=300.e3
+    pars["domain_xy"]=100.e3
     pars["dxy"]=2000.
 
     #Diagnostics for a netcdf output file with maps
     #Frequency of maps slices (one map every nfig_hr hours)
+<<<<<<< HEAD
+    pars["nfig_hr"]=1/120.
+=======
     pars["nfig_hr"]=1./120.
+>>>>>>> f9769c656884e2aac0a99c1728b16eb9d1e552f4
 
     return(pars)
     
@@ -243,6 +261,10 @@ def main(pars):
     probabilities.units = 'percentage'
 
     
+    cin_anom_save = nc1.createVariable("CIN anom","f4",("time","y","x",))
+    cin_anom_save.long_name = "cin anom"
+    cin_anom_save.units = 'cin unit'
+    
     var_D2C=nc1.createVariable("D2C","f4",("time","y","x",))
     var_D2C.long_name="Distance to nearest updraft"
     var_D2C.units="km"
@@ -251,9 +273,14 @@ def main(pars):
         var_CIN=nc1.createVariable("CIN","f4",("time","y","x",))
         var_CIN.units="fraction"
         
+<<<<<<< HEAD
+        var_CAPE=nc1.createVariable("CAPE","f4",("time","y","x",))
+        var_CAPE.units="fraction"
+=======
         cin_grad_save = nc1.createVariable("CIN_grad","f4",("time","y","x",))
         cin_grad_save.long_name = "gradient"
         cin_grad_save.units = 'cin unit'
+>>>>>>> f9769c656884e2aac0a99c1728b16eb9d1e552f4
    
    #Counter for the number of overwritings of the maps file 
     nccnt = 0
@@ -359,6 +386,8 @@ def main(pars):
     
     #Initialization of the CIN array accounting for the action of coldpools
     cin=np.zeros([nx,ny])
+    #Sas's doing
+    cape=np.ones([nx,ny])
 
     #Loop over time
     for it in tqdm(range(nt)):
@@ -391,7 +420,8 @@ def main(pars):
         #Account for convective inhibiting action of coldpools
         prob_cin=1.0-cin
         if pars["cin_radius"]>0:                                                                                                                                                                           
-            prob*=prob_cin                                                                                                                                                    
+            prob*=prob_cin
+            prob*=cape                                                                                                                                                    
         
         #Normalization to get a PDF
         prob/=np.sum(prob)                                                                                                                                                               
@@ -445,7 +475,10 @@ def main(pars):
 
         #Account for cold pool inhibition effect 
         if pars["cin_radius"]>0:
-            maskcin=np.where(cnvdst<pars["cin_radius"],1,0)
+            #maskcin=np.where(cnvdst<pars["cin_radius"],1,0)
+            #Sas's doing
+            cp_exp=pars["cin_radius"]+(pars['cp_vel']*it)/1000
+            maskcin=np.where(cnvdst<cp_exp,1,0)
             
             #cin = 1 for the points within distance cin_radius from the convective source
             cin=cin+maskcin 
@@ -456,9 +489,22 @@ def main(pars):
             
             #put cold pool here
             cin_grad=np.sqrt(np.nansum(np.array(np.gradient(cin))**2,axis=0)) #Sas's doing
+            cin_anom=cin-np.nanmean(cin)
             
             ########
             cin=np.clip(cin,0,1)
+            
+            #This is Sas's doing
+            maskcape=find_0_nearby_1(maskcin)
+            cape=cape+maskcape
+            cape=np.clip(cape,0,1)
+            cape = ADI(cape, alpha_cape, beta_cape, omega_cape, nx, ny, x_cape, y_cape, z_cape)
+            cape=np.clip(cape,0,1)
+            
+            # Modify the cape probability so that it does not keep on increasing
+            # Add a sink term
+            # Play with the variables to see the impact on aggregation
+            
 
         #At each time step, some convective cells may be randomly killed
         mask=np.where(np.random.uniform(size=(ny,nx))<=cnv_death,0,1)
@@ -489,8 +535,15 @@ def main(pars):
             var_D2C[nccnt,:,:]=cnvdst
             probabilities[nccnt,:,:]=prob   
             if pars["cin_radius"]>0:
+<<<<<<< HEAD
+                var_CIN[nccnt,:,:]=cin     
+                var_CAPE[nccnt,:,:]=cape     
+                cin_grad_save[nccnt,:,:]=cin_grad
+                cin_anom_save[nccnt,:,:]=cin_anom
+=======
                 var_CIN[nccnt,:,:]=cin       
                 cin_grad_save[nccnt,:,:]=cin_grad
+>>>>>>> f9769c656884e2aac0a99c1728b16eb9d1e552f4
             nccnt+=1
 
     nc1.close()
