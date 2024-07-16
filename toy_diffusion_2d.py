@@ -74,7 +74,7 @@ def defaults():
     #Sas's doing
     #Coldpools: diffusion coefficient (m**2/s) and lifetime (seconds)
     pars["diffCAPE"]=20e3
-    pars["tau_cape"]=3*3600.
+    pars["tau_cape"]=600.
     pars["cp_vel"]=10 #m/s
 
     #Different diurnal cycle specifications (active only if diurn_opt != 0)  
@@ -88,7 +88,7 @@ def defaults():
     #Experimental configuration
     
     #Total simulated time (days) and timestep (seconds)
-    pars["nday"]=50
+    pars["nday"]=10
     pars["dt"]=180.
     
     #Domain size (m) and horizontal resolution (m)
