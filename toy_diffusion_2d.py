@@ -86,11 +86,8 @@ def defaults():
 
     #Diagnostics for a netcdf output file with maps
     #Frequency of maps slices (one map every nfig_hr hours)
-<<<<<<< HEAD
+
     pars["nfig_hr"]=1/120.
-=======
-    pars["nfig_hr"]=1./120.
->>>>>>> f9769c656884e2aac0a99c1728b16eb9d1e552f4
 
     return(pars)
     
@@ -273,14 +270,14 @@ def main(pars):
         var_CIN=nc1.createVariable("CIN","f4",("time","y","x",))
         var_CIN.units="fraction"
         
-<<<<<<< HEAD
+
         var_CAPE=nc1.createVariable("CAPE","f4",("time","y","x",))
         var_CAPE.units="fraction"
-=======
+
         cin_grad_save = nc1.createVariable("CIN_grad","f4",("time","y","x",))
         cin_grad_save.long_name = "gradient"
         cin_grad_save.units = 'cin unit'
->>>>>>> f9769c656884e2aac0a99c1728b16eb9d1e552f4
+
    
    #Counter for the number of overwritings of the maps file 
     nccnt = 0
@@ -475,10 +472,10 @@ def main(pars):
 
         #Account for cold pool inhibition effect 
         if pars["cin_radius"]>0:
-            #maskcin=np.where(cnvdst<pars["cin_radius"],1,0)
+            maskcin=np.where(cnvdst<pars["cin_radius"],1,0)
             #Sas's doing
             cp_exp=pars["cin_radius"]+(pars['cp_vel']*it)/1000
-            maskcin=np.where(cnvdst<cp_exp,1,0)
+            #maskcin=np.where(cnvdst<cp_exp,1,0)
             
             #cin = 1 for the points within distance cin_radius from the convective source
             cin=cin+maskcin 
@@ -535,15 +532,10 @@ def main(pars):
             var_D2C[nccnt,:,:]=cnvdst
             probabilities[nccnt,:,:]=prob   
             if pars["cin_radius"]>0:
-<<<<<<< HEAD
                 var_CIN[nccnt,:,:]=cin     
                 var_CAPE[nccnt,:,:]=cape     
                 cin_grad_save[nccnt,:,:]=cin_grad
                 cin_anom_save[nccnt,:,:]=cin_anom
-=======
-                var_CIN[nccnt,:,:]=cin       
-                cin_grad_save[nccnt,:,:]=cin_grad
->>>>>>> f9769c656884e2aac0a99c1728b16eb9d1e552f4
             nccnt+=1
 
     nc1.close()
