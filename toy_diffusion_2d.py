@@ -43,16 +43,16 @@ def defaults():
     pars={}
     
     #Horizontal moisture diffusion coefficient (same in both directions, in m**2/s)
-    pars["diffK"]=10000.
+    pars["diffK"]=2000.
     
     #Steepness of the exponential function governing the choice of convective locations. Default is from TRMM retrieval version 7 (see Rushley et al. (2018), https://doi.org/10.1002/2017GL076296; see also Bretherton et al. (2004), https://doi.org/10.1175/1520-0442(2004)017<1517:RBWVPA>2.0.CO;2, and references therein)
-    pars["crh_ad"]=14.72
+    pars["crh_ad"]=15
     
     #Subsidence drying timescale (in days, not seconds!)
-    pars["tau_sub"]=16.
+    pars["tau_sub"]=15.
     
     #Convective inhibition radius (km) due to the effect of cold pols. Setting cin_radius to a negative value switches off cold pools by default.
-    pars["cin_radius"]=1
+    pars["cin_radius"]=4
 
     #Option to include the diurnal cycle, if = 0 no diurnal cycle is considered
     pars["diurn_opt"]=0
@@ -68,12 +68,12 @@ def defaults():
     pars["cnv_lifetime"]=1800.
     
     #Coldpools: diffusion coefficient (m**2/s) and lifetime (seconds)
-    pars["diffCIN"]=9e3#0.25*10*50.e3
+    pars["diffCIN"]=40e3#0.25*10*50.e3
     pars["tau_cin"]=3*3600.
     
     #Sas's doing
     #Coldpools: diffusion coefficient (m**2/s) and lifetime (seconds)
-    pars["diffCAPE"]=9e3
+    pars["diffCAPE"]=20e3
     pars["tau_cape"]=3*3600.
     pars["cp_vel"]=10 #m/s
 
@@ -88,17 +88,17 @@ def defaults():
     #Experimental configuration
     
     #Total simulated time (days) and timestep (seconds)
-    pars["nday"]=1
-    pars["dt"]=30.
+    pars["nday"]=50
+    pars["dt"]=180.
     
     #Domain size (m) and horizontal resolution (m)
-    pars["domain_xy"]=100.e3
-    pars["dxy"]=2000.
+    pars["domain_xy"]=500.e3
+    pars["dxy"]=4000.
 
     #Diagnostics for a netcdf output file with maps
     #Frequency of maps slices (one map every nfig_hr hours)
 
-    pars["nfig_hr"]=1/120.
+    pars["nfig_hr"]=1/20.
 
     return(pars)
     
@@ -237,7 +237,7 @@ def main(pars):
     #-------------------
     
     #Name of the output files
-    tab="diffK"+str(pars["diffK"])+"_tausub"+str(pars["tau_sub"])[0:6]+"_crhad"+str(pars["crh_ad"])+"_cin_radius"+str(pars["cin_radius"])+"_diurn"+str(pars["diurn_opt"])
+    tab="diffK"+str(pars["diffK"])+"_tausub"+str(pars["tau_sub"])[0:6]+"_crhad"+str(pars["crh_ad"])+"_cin_radius"+str(pars["cin_radius"])+"_diurn"+str(pars["diurn_opt"])+"diffCIN"+str(pars["diffCIN"])
     
     print ("toy_diffusion_2d model of atmosphere")
     print ("opening output maps/stats:",tab)
