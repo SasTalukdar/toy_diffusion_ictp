@@ -13,6 +13,19 @@ import subprocess
 from tqdm import tqdm
 from scipy.ndimage import convolve
 
+def create_time_dependent_mask(cnv_loc, memory, cin_radius, cp_vel, nx, ny, dxkm, dt):
+    mask=np.zeros([nx,ny])
+    coords=np.meshgrid(np.arange(nx),np.arange(ny))
+    for loc in cnv_loc:
+        dis=np.transpose(np.sqrt((coords[0]-loc[0])**2+(coords[1]-loc[1])**2))*dxkm
+        if str(loc) not in memory:
+            lt=0
+            print('not found')
+        else:
+            lt=memory[str(loc)]*dt #lifetime
+        mask[dis<(cin_radius+cp_vel*lt/1000)]=1
+    return mask
+
 def find_0_nearby_1(x):
     kernel = np.array([[1, 1, 1],
                        [1, 0, 1],
@@ -383,6 +396,8 @@ def main(pars):
     cin=np.zeros([nx,ny])
     #Sas's doing
     cape=np.ones([nx,ny])
+    memory={}
+    cnv_loc=[]
 
     #Loop over time
     for it in tqdm(range(nt)):
@@ -471,9 +486,6 @@ def main(pars):
         #Account for cold pool inhibition effect 
         if pars["cin_radius"]>0:
             maskcin=np.where(cnvdst<pars["cin_radius"],1,0)
-            #Sas's doing
-            cp_exp=pars["cin_radius"]+(pars['cp_vel']*it)/1000
-            #maskcin=np.where(cnvdst<cp_exp,1,0)
             
             #cin = 1 for the points within distance cin_radius from the convective source
             cin=cin+maskcin 
@@ -490,7 +502,8 @@ def main(pars):
             cin=np.clip(cin,0,1)
             
             #This is Sas's doing
-            maskcape=find_0_nearby_1(maskcin)
+            maskcin1=create_time_dependent_mask(cnv_loc, memory, pars['cin_radius'], pars['cp_vel'], nx, ny, dxkm, dt)
+            maskcape=find_0_nearby_1(maskcin1)
             cape=cape+maskcape
             cape=np.clip(cape,0,1)
             cape = ADI(cape, alpha_cape, beta_cape, omega_cape, nx, ny, x_cape, y_cape, z_cape)
@@ -504,8 +517,21 @@ def main(pars):
         #At each time step, some convective cells may be randomly killed
         mask=np.where(np.random.uniform(size=(ny,nx))<=cnv_death,0,1)
         cnv_idx*=mask
-        cnv_loc=np.argwhere(cnv_idx==1)    
- 
+        cnv_loc=np.argwhere(cnv_idx==1)
+        
+        #Sas's doing
+        #Create memory
+        for loc in cnv_loc:
+            if str(loc) in memory:
+                memory[str(loc)]+=1
+            else:
+                memory[str(loc)]=1
+        #Delete non existing cells from memory
+        temp_loc=memory.copy()
+        for loc in temp_loc.keys():
+            if loc not in [str(x) for x in cnv_loc]:
+                memory.pop(str(loc))
+                
         #-------------------
         #Writing of netcdf output
         #-------------------
