@@ -82,6 +82,9 @@ def defaults():
     pars["cp_init_delay"]=20*60 #seconds
     pars["vel_coeff"]=1
 
+    #Wind shear
+    pars["shear"]=8 #km
+    
     #Different diurnal cycle specifications (active only if diurn_opt != 0)  
     pars["diurn_a"]=0.6
     pars["diurn_p"]=2.0
@@ -242,7 +245,7 @@ def main(pars):
     #-------------------
     
     #Name of the output files
-    tab="diffK"+str(pars["diffK"])+"_tausub"+str(pars["tau_sub"])[0:6]+"_crhad"+str(pars["crh_ad"])+"_cin_radius"+str(pars["cin_radius"])+"_diurn"+str(pars["diurn_opt"])+"diffCIN"+str(pars["diffCIN"])
+    tab="diffK"+str(pars["diffK"])+"_tausub"+str(pars["tau_sub"])[0:6]+"_crhad"+str(pars["crh_ad"])+"_cin_radius"+str(pars["cin_radius"])+"_diurn"+str(pars["diurn_opt"])+"diffCIN"+str(pars["diffCIN"])+'shear'+str(pars["shear"])
     
     print ("toy_diffusion_2d model of atmosphere")
     print ("opening output maps/stats:",tab)
@@ -491,9 +494,10 @@ def main(pars):
         #Account for cold pool inhibition effect 
         if pars["cin_radius"]>0:
             maskcin=np.where(cnvdst<pars["cin_radius"],1,0)
+            shifted_maskcin1=np.roll(maskcin,int(pars["shear"]*1000/dxy),axis=0)
             
             #cin = 1 for the points within distance cin_radius from the convective source
-            cin=cin+maskcin 
+            cin=cin+shifted_maskcin1 
             cin=np.clip(cin,0,1)
                    
             #Solution of the differential problem for CIN with ADI method            
@@ -508,7 +512,8 @@ def main(pars):
             
             #This is Sas's doing
             maskcin1=create_time_dependent_mask(cnv_loc, memory, pars['cin_radius'], pars['cp_init_vel'], pars["cp_init_delay"], nx, ny, dxkm, dt)
-            maskcape=find_0_nearby_1(maskcin1)
+            shifted_maskcin2=np.roll(maskcin1,int(pars["shear"]*1000/dxy),axis=0)
+            maskcape=find_0_nearby_1(shifted_maskcin2)
             cape=cape+maskcape
             cape=np.clip(cape,0,1)
             cape = ADI(cape, alpha_cape, beta_cape, omega_cape, nx, ny, x_cape, y_cape, z_cape)
