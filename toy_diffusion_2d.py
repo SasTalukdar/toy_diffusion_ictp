@@ -13,7 +13,7 @@ import subprocess
 from tqdm import tqdm
 from scipy.ndimage import convolve
 
-def create_time_dependent_mask(cnv_loc, memory, cin_radius, cp_vel, nx, ny, dxkm, dt):
+def create_time_dependent_mask(cnv_loc, memory, cin_radius, cp_vel, cp_init_delay, nx, ny, dxkm, dt):
     mask=np.zeros([nx,ny])
     coords=np.meshgrid(np.arange(nx),np.arange(ny))
     for loc in cnv_loc:
@@ -23,7 +23,10 @@ def create_time_dependent_mask(cnv_loc, memory, cin_radius, cp_vel, nx, ny, dxkm
             print('not found')
         else:
             lt=memory[str(loc)]*dt #lifetime
-        mask[dis<(cin_radius+cp_vel*lt/1000)]=1
+        lt=lt-cp_init_delay
+        if lt<0:
+            lt=0
+        mask[dis<(cin_radius+(cp_vel*lt/1000)**(1/3))]=1 #considering inverse squr law
     return mask
 
 def find_0_nearby_1(x):
@@ -75,7 +78,9 @@ def defaults():
     #Coldpools: diffusion coefficient (m**2/s) and lifetime (seconds)
     pars["diffCAPE"]=20e3
     pars["tau_cape"]=600.
-    pars["cp_vel"]=10 #m/s
+    pars["cp_init_vel"]=10 #m/s
+    pars["cp_init_delay"]=20*60 #seconds
+    pars["vel_coeff"]=1
 
     #Different diurnal cycle specifications (active only if diurn_opt != 0)  
     pars["diurn_a"]=0.6
@@ -502,7 +507,7 @@ def main(pars):
             cin=np.clip(cin,0,1)
             
             #This is Sas's doing
-            maskcin1=create_time_dependent_mask(cnv_loc, memory, pars['cin_radius'], pars['cp_vel'], nx, ny, dxkm, dt)
+            maskcin1=create_time_dependent_mask(cnv_loc, memory, pars['cin_radius'], pars['cp_init_vel'], pars["cp_init_delay"], nx, ny, dxkm, dt)
             maskcape=find_0_nearby_1(maskcin1)
             cape=cape+maskcape
             cape=np.clip(cape,0,1)
