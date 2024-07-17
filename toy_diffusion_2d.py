@@ -16,17 +16,22 @@ from scipy.ndimage import convolve
 def create_time_dependent_mask(cnv_loc, memory, cin_radius, cp_vel, cp_init_delay, nx, ny, dxkm, dt):
     mask=np.zeros([nx,ny])
     coords=np.meshgrid(np.arange(nx),np.arange(ny))
+    cin_radius_m=cin_radius*1000 #m
     for loc in cnv_loc:
-        dis=np.transpose(np.sqrt((coords[0]-loc[0])**2+(coords[1]-loc[1])**2))*dxkm
+        dis=np.transpose(np.sqrt((coords[0]-loc[0])**2+(coords[1]-loc[1])**2))*dxkm*1000 #meters
         if str(loc) not in memory:
             lt=0
             print('not found')
         else:
-            lt=memory[str(loc)]*dt #lifetime
+            lt=memory[str(loc)]*dt #lifetime, seconds
         lt=lt-cp_init_delay
         if lt<0:
             lt=0
-        mask[dis<(cin_radius+(cp_vel*lt/1000)**(1/3))]=1 #considering inverse squr law
+        # mask[dis<(cin_radius+(cp_vel*lt/1000)**(1/3))]=1 #considering inverse squr law
+        if lt>0:
+            mask[dis<=(cin_radius_m+lt*(cp_vel*cin_radius_m*cin_radius_m/(lt*lt))**(1/3))]=1 #considering inverse squr law
+        else:
+            pass
     return mask
 
 def find_0_nearby_1(x):
@@ -46,16 +51,16 @@ def defaults():
     pars={}
     
     #Horizontal moisture diffusion coefficient (same in both directions, in m**2/s)
-    pars["diffK"]=2000.
+    pars["diffK"]=20000.
     
     #Steepness of the exponential function governing the choice of convective locations. Default is from TRMM retrieval version 7 (see Rushley et al. (2018), https://doi.org/10.1002/2017GL076296; see also Bretherton et al. (2004), https://doi.org/10.1175/1520-0442(2004)017<1517:RBWVPA>2.0.CO;2, and references therein)
     pars["crh_ad"]=15
     
     #Subsidence drying timescale (in days, not seconds!)
-    pars["tau_sub"]=15.
+    pars["tau_sub"]=3.
     
     #Convective inhibition radius (km) due to the effect of cold pols. Setting cin_radius to a negative value switches off cold pools by default.
-    pars["cin_radius"]=4
+    pars["cin_radius"]=1
 
     #Option to include the diurnal cycle, if = 0 no diurnal cycle is considered
     pars["diurn_opt"]=0
@@ -76,14 +81,14 @@ def defaults():
     
     #Sas's doing
     #Coldpools: diffusion coefficient (m**2/s) and lifetime (seconds)
-    pars["diffCAPE"]=20e3
+    pars["diffCAPE"]=40e3
     pars["tau_cape"]=600.
-    pars["cp_init_vel"]=10 #m/s
-    pars["cp_init_delay"]=20*60 #seconds
+    pars["cp_init_vel"]=20 #m/s
+    pars["cp_init_delay"]=10*60 #seconds
     pars["vel_coeff"]=1
 
     #Wind shear
-    pars["shear"]=8 #km
+    pars["shear"]=12 #km
     
     #Different diurnal cycle specifications (active only if diurn_opt != 0)  
     pars["diurn_a"]=0.6
@@ -96,17 +101,17 @@ def defaults():
     #Experimental configuration
     
     #Total simulated time (days) and timestep (seconds)
-    pars["nday"]=10
-    pars["dt"]=180.
+    pars["nday"]=1
+    pars["dt"]=20.
     
     #Domain size (m) and horizontal resolution (m)
-    pars["domain_xy"]=500.e3
-    pars["dxy"]=4000.
+    pars["domain_xy"]=100.e3
+    pars["dxy"]=1000.
 
     #Diagnostics for a netcdf output file with maps
     #Frequency of maps slices (one map every nfig_hr hours)
 
-    pars["nfig_hr"]=1/20.
+    pars["nfig_hr"]=1/180
 
     return(pars)
     

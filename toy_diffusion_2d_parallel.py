@@ -22,6 +22,7 @@ import itertools
 def create_time_dependent_mask(cnv_loc, memory, cin_radius, cp_vel, cp_init_delay, nx, ny, dxkm, dt):
     mask=np.zeros([nx,ny])
     coords=np.meshgrid(np.arange(nx),np.arange(ny))
+    cin_radius_m=cin_radius*1000 #m
     for loc in cnv_loc:
         dis=np.transpose(np.sqrt((coords[0]-loc[0])**2+(coords[1]-loc[1])**2))*dxkm
         if str(loc) not in memory:
@@ -30,9 +31,8 @@ def create_time_dependent_mask(cnv_loc, memory, cin_radius, cp_vel, cp_init_dela
         else:
             lt=memory[str(loc)]*dt #lifetime
         lt=lt-cp_init_delay
-        if lt<0:
-            lt=0
-        mask[dis<(cin_radius+(cp_vel*lt/1000)**(1/3))]=1 #considering inverse squr law
+        if lt>0:
+            mask[dis<=(cin_radius_m+lt*(cp_vel*cin_radius_m*cin_radius_m/(lt*lt))**(1/3))]=1 #considering inverse squr law
     return mask
 
 def find_0_nearby_1(x):
