@@ -20,20 +20,35 @@ from concurrent.futures import ProcessPoolExecutor
 import itertools
 
 def create_time_dependent_mask(cnv_loc, memory, cin_radius, cp_vel, cp_init_delay, nx, ny, dxkm, dt):
-    mask=np.zeros([nx,ny])
-    coords=np.meshgrid(np.arange(nx),np.arange(ny))
+    capemask=np.zeros([nx,ny])
+    cinmask=np.zeros([nx,ny])
     cin_radius_m=cin_radius*1000 #m
+    allidx=np.argwhere(np.zeros([nx,ny])<1)
     for loc in cnv_loc:
-        dis=np.transpose(np.sqrt((coords[0]-loc[0])**2+(coords[1]-loc[1])**2))*dxkm
+        for xoff in [0,nx,-nx]:
+            for yoff in [0,-ny,ny]:
+                if xoff==0 and yoff==0:
+                    j9=loc.copy()
+                else:
+                    jo=loc.copy()
+                    jo[0]+=xoff
+                    jo[1]+=yoff
+                    j9=np.vstack((j9,jo))
+        tree=spatial.cKDTree(j9)
+        cnvdst,minidx=tree.query(allidx)
+        cnvdst=cnvdst.reshape([nx,ny])
+        cnvdst*=dxkm*1000
         if str(loc) not in memory:
             lt=0
-            print('not found')
         else:
-            lt=memory[str(loc)]*dt #lifetime
+            lt=memory[str(loc)]*dt #lifetime, seconds
         lt=lt-cp_init_delay
+        if lt<0:
+            lt=0
         if lt>0:
-            mask[dis<=(cin_radius_m+lt*(cp_vel*cin_radius_m*cin_radius_m/(lt*lt))**(1/3))]=1 #considering inverse squr law
-    return mask
+            capemask[cnvdst<=(3*(cin_radius_m*cin_radius_m*cp_vel*lt)**(1/3)+cin_radius_m)]=1
+            cinmask[cnvdst<=cin_radius_m]=1
+    return cinmask,capemask
 
 def find_0_nearby_1(x):
     kernel = np.array([[1, 1, 1],
@@ -52,16 +67,16 @@ def defaults():
     pars={}
     
     #Horizontal moisture diffusion coefficient (same in both directions, in m**2/s)
-    pars["diffK"]=2000.
+    pars["diffK"]=20000.
     
     #Steepness of the exponential function governing the choice of convective locations. Default is from TRMM retrieval version 7 (see Rushley et al. (2018), https://doi.org/10.1002/2017GL076296; see also Bretherton et al. (2004), https://doi.org/10.1175/1520-0442(2004)017<1517:RBWVPA>2.0.CO;2, and references therein)
-    pars["crh_ad"]=15
+    pars["crh_ad"]=14.72
     
     #Subsidence drying timescale (in days, not seconds!)
-    pars["tau_sub"]=15.
+    pars["tau_sub"]=16.
     
     #Convective inhibition radius (km) due to the effect of cold pols. Setting cin_radius to a negative value switches off cold pools by default.
-    pars["cin_radius"]=4
+    pars["cin_radius"]=1
 
     #Option to include the diurnal cycle, if = 0 no diurnal cycle is considered
     pars["diurn_opt"]=0
@@ -77,14 +92,14 @@ def defaults():
     pars["cnv_lifetime"]=1800.
     
     #Coldpools: diffusion coefficient (m**2/s) and lifetime (seconds)
-    pars["diffCIN"]=40e3#0.25*10*50.e3
-    pars["tau_cin"]=3*3600.
+    pars["diffCIN"]=10000 #0.25*10*50.e3
+    pars["tau_cin"]=7200 #3*3600.
     
     #Sas's doing
     #Coldpools: diffusion coefficient (m**2/s) and lifetime (seconds)
-    pars["diffCAPE"]=20e3
+    pars["diffCAPE"]=12000 #0.25*10*50.e3
     pars["tau_cape"]=600.
-    pars["cp_init_vel"]=30 #m/s
+    pars["downdraft_velocity"]=3 #m/s
     pars["cp_init_delay"]=10*60 #seconds
     pars["vel_coeff"]=1
 
@@ -102,19 +117,20 @@ def defaults():
     #Experimental configuration
     
     #Total simulated time (days) and timestep (seconds)
-    pars["nday"]=10
-    pars["dt"]=180.
+    pars["nday"]=1
+    pars["dt"]=20.
     
     #Domain size (m) and horizontal resolution (m)
-    pars["domain_xy"]=500.e3
-    pars["dxy"]=4000.
+    pars["domain_xy"]=100.e3
+    pars["dxy"]=1000.
 
     #Diagnostics for a netcdf output file with maps
     #Frequency of maps slices (one map every nfig_hr hours)
 
-    pars["nfig_hr"]=1/20.
+    pars["nfig_hr"]=1/60
 
     return(pars)
+
     
 def generate_combinations(base_dict, keys, values):
     # Generate all combinations of values
@@ -263,7 +279,7 @@ def model(pars):
     #-------------------
     
     #Name of the output files
-    tab="diffK"+str(pars["diffK"])+"_tausub"+str(pars["tau_sub"])[0:6]+"_crhad"+str(pars["crh_ad"])+"_cin_radius"+str(pars["cin_radius"])+"_diurn"+str(pars["diurn_opt"])+"diffCIN"+str(pars["diffCIN"])+'shear'+str(pars["shear"])
+    tab="diffK"+str(pars["diffK"])+"_tausub"+str(pars["tau_sub"])[0:6]+"_crhad"+str(pars["crh_ad"])+"_cin_radius"+str(pars["cin_radius"])+"_downdraft_velocity"+str(pars['downdraft_velocity'])+"_diurn"+str(pars["diurn_opt"])+"_diffCIN"+str(pars["diffCIN"])+'_shear'+str(pars["shear"])
     
     print ("toy_diffusion_2d model of atmosphere")
     print ("opening output maps/stats:",tab)
@@ -307,16 +323,16 @@ def model(pars):
         var_CIN=nc1.createVariable("CIN","f4",("time","y","x",))
         var_CIN.units="fraction"
         
-
-        var_CAPE=nc1.createVariable("CAPE","f4",("time","y","x",))
-        var_CAPE.units="fraction"
+        if pars['downdraft_velocity']>0:
+            var_CAPE=nc1.createVariable("CAPE","f4",("time","y","x",))
+            var_CAPE.units="fraction"
 
         cin_grad_save = nc1.createVariable("CIN_grad","f4",("time","y","x",))
         cin_grad_save.long_name = "gradient"
         cin_grad_save.units = 'cin unit'
 
    
-   #Counter for the number of overwritings of the maps file 
+    #Counter for the number of overwritings of the maps file 
     nccnt = 0
 
     #File 2 (statistics)
@@ -457,7 +473,8 @@ def model(pars):
         prob_cin=1.0-cin
         if pars["cin_radius"]>0:                                                                                                                                                                           
             prob*=prob_cin
-            prob*=cape                                                                                                                                                    
+            if pars['downdraft_velocity']>0:
+                prob*=cape                                                                                                                                                    
         
         #Normalization to get a PDF
         prob/=np.sum(prob)                                                                                                                                                               
@@ -511,7 +528,8 @@ def model(pars):
 
         #Account for cold pool inhibition effect 
         if pars["cin_radius"]>0:
-            maskcin=np.where(cnvdst<pars["cin_radius"],1,0)
+            # maskcin=np.where(cnvdst<pars["cin_radius"],1,0)
+            maskcin=create_time_dependent_mask(cnv_loc, memory, pars['cin_radius'], pars['downdraft_velocity'], pars["cp_init_delay"], nx, ny, dxkm, dt)[0]
             shifted_maskcin1=np.roll(maskcin,int(pars["shear"]*1000/dxy),axis=0)
             
             #cin = 1 for the points within distance cin_radius from the convective source
@@ -529,13 +547,14 @@ def model(pars):
             cin=np.clip(cin,0,1)
             
             #This is Sas's doing
-            maskcin1=create_time_dependent_mask(cnv_loc, memory, pars['cin_radius'], pars['cp_init_vel'], pars["cp_init_delay"], nx, ny, dxkm, dt)
-            shifted_maskcin2=np.roll(maskcin1,int(pars["shear"]*1000/dxy),axis=0)
-            maskcape=find_0_nearby_1(shifted_maskcin2)
-            cape=cape+maskcape
-            cape=np.clip(cape,0,1)
-            cape = ADI(cape, alpha_cape, beta_cape, omega_cape, nx, ny, x_cape, y_cape, z_cape)
-            cape=np.clip(cape,0,1)
+            if pars['downdraft_velocity']>0:
+                maskcin1=create_time_dependent_mask(cnv_loc, memory, pars['cin_radius'], pars['downdraft_velocity'], pars["cp_init_delay"], nx, ny, dxkm, dt)[1]
+                shifted_maskcin2=np.roll(maskcin1,int(pars["shear"]*1000/dxy),axis=0)
+                maskcape=find_0_nearby_1(shifted_maskcin2)
+                cape=cape+maskcape
+                cape=np.clip(cape,0,1)
+                cape = ADI(cape, alpha_cape, beta_cape, omega_cape, nx, ny, x_cape, y_cape, z_cape)
+                cape=np.clip(cape,0,1)
             
             # Modify the cape probability so that it does not keep on increasing
             # Add a sink term
@@ -584,8 +603,9 @@ def model(pars):
             var_D2C[nccnt,:,:]=cnvdst
             probabilities[nccnt,:,:]=prob   
             if pars["cin_radius"]>0:
-                var_CIN[nccnt,:,:]=cin     
-                var_CAPE[nccnt,:,:]=cape     
+                var_CIN[nccnt,:,:]=cin  
+                if pars['downdraft_velocity']>0:
+                    var_CAPE[nccnt,:,:]=cape     
                 cin_grad_save[nccnt,:,:]=cin_grad
                 cin_anom_save[nccnt,:,:]=cin_anom
             nccnt+=1
@@ -595,8 +615,8 @@ def model(pars):
 
 def main():
     pars=defaults() 
-    keys=['diffK','crh_ad','cin_radius','shear']
-    values=[np.arange(1000,4001,1000), np.arange(10,21,5), np.arange(0,5,2), np.arange(0,16,8)]
+    keys=['cin_radius','shear','cp_init_vel']
+    values=[ [-99, 1, 2], [0, 6, 12],[-99, 15]]
     list_pars = generate_combinations(pars, keys, values)
     with ProcessPoolExecutor(max_workers=64) as executor:
         results = executor.map(model, list_pars)
