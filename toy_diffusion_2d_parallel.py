@@ -1,11 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Tue Jul 16 21:05:12 2024
-
-@author: sasankatalukdar
-"""
-
 from scipy.ndimage.filters import uniform_filter1d
 from scipy import spatial
 from scipy.linalg import solve_circulant
@@ -19,12 +11,32 @@ from scipy.ndimage import convolve
 from concurrent.futures import ProcessPoolExecutor
 import itertools
 
+#A function to create a mask for the CAPE and CIN radius
 def create_time_dependent_mask(cnv_loc, memory, cin_radius, cp_vel, cp_init_delay, nx, ny, dxkm, dt):
+    '''
+    Input parameters:
+        cnv_loc: currently active convection locations, 
+        memory:  lifetime duration of each convective event, 
+        cin_radius: radius of downdraft, 
+        cp_vel: downdraft velocity, 
+        cp_init_delay: delay for the initiation of convection, 
+        nx, ny: domain size, 
+        dxkm: spatial resolution, 
+        dt: temporal resolution
+    
+    Output parameters:
+        cinmask: mask for downdraft
+        capemask: mask for the gustfront
+    '''
+    
     capemask=np.zeros([nx,ny])
     cinmask=np.zeros([nx,ny])
-    cin_radius_m=cin_radius*1000 #m
+    cin_radius_m=cin_radius*1000 #Convert to meters
+    # Includes all the grid points (will be used in the computation of the distances from the updraft location, = 0 in case the cell itself is developing convection)
     allidx=np.argwhere(np.zeros([nx,ny])<1)
+    # As each convective cell has a different lifetime and hence different radius of influence, the mask is updated based on one updraft at a time
     for loc in cnv_loc:
+        #The procedure takes into account the doubly-periodic nature of the computational domain
         for xoff in [0,nx,-nx]:
             for yoff in [0,-ny,ny]:
                 if xoff==0 and yoff==0:
@@ -38,6 +50,7 @@ def create_time_dependent_mask(cnv_loc, memory, cin_radius, cp_vel, cp_init_dela
         cnvdst,minidx=tree.query(allidx)
         cnvdst=cnvdst.reshape([nx,ny])
         cnvdst*=dxkm*1000
+        # The delay in activation of CIN and CAPE is considered
         if str(loc) not in memory:
             lt=0
         else:
@@ -50,6 +63,7 @@ def create_time_dependent_mask(cnv_loc, memory, cin_radius, cp_vel, cp_init_dela
             cinmask[cnvdst<=cin_radius_m]=1
     return cinmask,capemask
 
+# A function to detect the edge of the CAPE mask and update it with 1's in the edge and 0 everywhere else
 def find_0_nearby_1(x):
     kernel = np.array([[1, 1, 1],
                        [1, 0, 1],
@@ -91,12 +105,12 @@ def defaults():
     #Average lifetime of a convective event
     pars["cnv_lifetime"]=1800.
     
-    #Coldpools: diffusion coefficient (m**2/s) and lifetime (seconds)
+    #Coldpool center: diffusion coefficient (m**2/s) and lifetime (seconds)
     pars["diffCIN"]=10000 #0.25*10*50.e3
     pars["tau_cin"]=7200 #3*3600.
     
     #Sas's doing
-    #Coldpools: diffusion coefficient (m**2/s) and lifetime (seconds)
+    #Coldpool edge: diffusion coefficient (m**2/s) and lifetime (seconds)
     pars["diffCAPE"]=12000 #0.25*10*50.e3
     pars["tau_cape"]=600.
     pars["downdraft_velocity"]=3 #m/s
@@ -131,7 +145,7 @@ def defaults():
 
     return(pars)
 
-    
+# Function to generate all possible combinations of given parameters for parallel processing
 def generate_combinations(base_dict, keys, values):
     # Generate all combinations of values
     all_combinations = list(itertools.product(*values))
@@ -258,7 +272,7 @@ def model(pars):
     
     #Sas's doing
     #-------------------
-    #Quantities for the solution of the problem with cold pools lifting
+    #Quantities for the solution of the problem with cold pools lifting at the edges
 
     beta_cape=.5*pars["diffCAPE"]*dt/dxy**2
     alpha_cape = 2*beta_cape
@@ -434,10 +448,12 @@ def model(pars):
         radius=20
         crh[mp-radius:mp+radius,mp-radius:mp+radius]=1.0
     
-    #Initialization of the CIN array accounting for the action of coldpools
+    #Initialization of the CIN array accounting for the action of coldpool centers
     cin=np.zeros([nx,ny])
     #Sas's doing
+    #Initialization of the CIN array accounting for the action of coldpool edges
     cape=np.ones([nx,ny])
+    #Initialization of the memory dictionary to save the lifetime information of each convective cell
     memory={}
     cnv_loc=[]
 
@@ -469,10 +485,11 @@ def model(pars):
         prob_crh/=np.mean(prob_crh)     
         prob=prob_crh     
         
-        #Account for convective inhibiting action of coldpools
+        #Account for convective inhibiting action of coldpool centers
         prob_cin=1.0-cin
         if pars["cin_radius"]>0:                                                                                                                                                                           
             prob*=prob_cin
+            #Account for convective initiation action of coldpool edges
             if pars['downdraft_velocity']>0:
                 prob*=cape                                                                                                                                                    
         
@@ -501,7 +518,7 @@ def model(pars):
             crh = (pars["crh_det"]+(crh-pars["crh_det"])*np.exp(-0.5*dt_tau_cnv))*cnv_idx+crh*(1-cnv_idx)
 
         #-------------------
-        #Routine to calculate the distance to the nearest convective updraft
+        #Routine to calculate the distance to the nearest convective updraft (Probably redundant now!)
         #-------------------
         
         cnv_coords=np.argwhere(cnv_idx)
@@ -530,6 +547,7 @@ def model(pars):
         if pars["cin_radius"]>0:
             # maskcin=np.where(cnvdst<pars["cin_radius"],1,0)
             maskcin=create_time_dependent_mask(cnv_loc, memory, pars['cin_radius'], pars['downdraft_velocity'], pars["cp_init_delay"], nx, ny, dxkm, dt)[0]
+            # the mask is shifted due to wind shear effect
             shifted_maskcin1=np.roll(maskcin,int(pars["shear"]*1000/dxy),axis=0)
             
             #cin = 1 for the points within distance cin_radius from the convective source
@@ -539,7 +557,7 @@ def model(pars):
             #Solution of the differential problem for CIN with ADI method            
             cin = ADI(cin, alpha_cin, beta_cin, omega_cin, nx, ny, x_cin, y_cin, z_cin)
             
-            #put cold pool here
+            #Some diagnostic variables that may be be useful
             cin_grad=np.sqrt(np.nansum(np.array(np.gradient(cin))**2,axis=0)) #Sas's doing
             cin_anom=cin-np.nanmean(cin)
             
@@ -547,20 +565,22 @@ def model(pars):
             cin=np.clip(cin,0,1)
             
             #This is Sas's doing
+            # Account for convective initiation at the cold pool edge
             if pars['downdraft_velocity']>0:
+                #create a cape mask considering the lifetime of the convective cells and gust velocity
                 maskcin1=create_time_dependent_mask(cnv_loc, memory, pars['cin_radius'], pars['downdraft_velocity'], pars["cp_init_delay"], nx, ny, dxkm, dt)[1]
+                #the mask is shifted due to the effect of wind shear
                 shifted_maskcin2=np.roll(maskcin1,int(pars["shear"]*1000/dxy),axis=0)
+                #the edge of the mask is converted to 1 and the rest to 0
                 maskcape=find_0_nearby_1(shifted_maskcin2)
+                #CAPE=1 for the points at the edge of the cold pool
                 cape=cape+maskcape
                 cape=np.clip(cape,0,1)
+                
+                #Solution of the differential problem for CAPE with ADI method   
                 cape = ADI(cape, alpha_cape, beta_cape, omega_cape, nx, ny, x_cape, y_cape, z_cape)
                 cape=np.clip(cape,0,1)
             
-            # Modify the cape probability so that it does not keep on increasing
-            # Add a sink term
-            # Play with the variables to see the impact on aggregation
-            
-
         #At each time step, some convective cells may be randomly killed
         mask=np.where(np.random.uniform(size=(ny,nx))<=cnv_death,0,1)
         cnv_idx*=mask
@@ -615,8 +635,10 @@ def model(pars):
 
 def main():
     pars=defaults() 
-    keys=['cin_radius','shear','cp_init_vel']
-    values=[ [-99, 1, 2], [0, 6, 12],[-99, 15]]
+    #keys=['cin_radius','shear','cp_init_vel']
+    #values=[ [-99, 1, 2], [0, 6, 12],[-99, 15]]
+    keys=[]
+    values=[]
     list_pars = generate_combinations(pars, keys, values)
     with ProcessPoolExecutor(max_workers=64) as executor:
         results = executor.map(model, list_pars)
